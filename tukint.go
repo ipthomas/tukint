@@ -609,7 +609,7 @@ func InitLambdaVars() {
 	} else {
 		log.Println("Unable to set PIX_MANAGER_URL environment variable. No Value found!")
 	}
-	if os.Getenv("PIX_MANAGER_URL") != "" {
+	if os.Getenv("DSUB_BROKER_URL") != "" {
 		DSUB_BROKER_URL = os.Getenv("DSUB_BROKER_URL")
 		log.Printf("Set DSUB_BROKER_URL environment variable - %s", DSUB_BROKER_URL)
 	} else {
