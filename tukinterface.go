@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	cnst "github.com/ipthomas/tukcnst"
+	utils "github.com/ipthomas/tukutils"
 )
 
 type TUKServiceState struct {
@@ -666,7 +666,7 @@ func NewDSUBEvent(eventMessage string) error {
 		}
 	} else {
 		log.Printf("No Subscription found with brokerref = %s. Sending Cancel request to Broker", i.BrokerRef)
-		cancel := DSUBCancel{BrokerRef: i.BrokerRef, UUID: NewUuid()}
+		cancel := DSUBCancel{BrokerRef: i.BrokerRef, UUID: utils.NewUuid()}
 		cancel.NewEvent()
 	}
 
@@ -1433,10 +1433,6 @@ func newTUKDBRequest(httpMethod string, resource string, body []byte) ([]byte, e
 		}
 	}
 	return nil, err
-}
-func NewUuid() string {
-	u := uuid.Must(uuid.NewV4())
-	return u.String()
 }
 
 // returns unique id in format '1.2.40.0.13.1.1.3542466645.20211021090059143.32643'
