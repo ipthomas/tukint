@@ -1,6 +1,6 @@
-# github.com/gofrs/uuid v4.2.0+incompatible
+# github.com/google/uuid v1.3.0
 ## explicit
-github.com/gofrs/uuid
+github.com/google/uuid
 # github.com/ipthomas/tukcnst v1.0.0
 ## explicit; go 1.19
 github.com/ipthomas/tukcnst

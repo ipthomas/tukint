@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	cnst "github.com/ipthomas/tukcnst"
 )
 
