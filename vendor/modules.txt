@@ -1,0 +1,6 @@
+# github.com/gofrs/uuid v4.2.0+incompatible
+## explicit
+github.com/gofrs/uuid
+# github.com/ipthomas/cnst v0.0.0-20220827205504-bfcdc48331cf
+## explicit
+github.com/ipthomas/cnst

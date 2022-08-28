@@ -3,8 +3,6 @@ module github.com/ipthomas/tukint
 go 1.19
 
 require (
-	github.com/ipthomas/tukcnst v1.0.0
-	github.com/ipthomas/tukutils v1.0.1
+	github.com/gofrs/uuid v4.2.0+incompatible
+	github.com/ipthomas/cnst v0.0.0-20220827205504-bfcdc48331cf
 )
-
-require github.com/google/uuid v1.3.0 // indirect
