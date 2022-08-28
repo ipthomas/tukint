@@ -18,7 +18,7 @@ import (
 	"time"
 
 	cnst "github.com/ipthomas/tukcnst"
-	utils "github.com/ipthomas/tukutils"
+	util "github.com/ipthomas/tukutil"
 )
 
 type TUKServiceState struct {
@@ -274,8 +274,17 @@ type PIXmResponse struct {
 		} `json:"resource"`
 	} `json:"entry"`
 }
+type PIXmQuery struct {
+	Count    int          `json:"count"`
+	PIDOID   string       `json:"pidoid"`
+	PID      string       `json:"pid"`
+	REGOID   string       `json:"regoid"`
+	REGID    string       `json:"regid"`
+	NHSOID   string       `json:"nhsoid"`
+	NHSID    string       `json:"nhsid"`
+	Response []PIXPatient `json:"response"`
+}
 type PIXPatient struct {
-	Count      int    `json:"count"`
 	PIDOID     string `json:"pidoid"`
 	PID        string `json:"pid"`
 	REGOID     string `json:"regoid"`
@@ -527,73 +536,138 @@ type TaskEvent struct {
 	EventType  string `xml:"eventType"`
 	Status     string `xml:"status"`
 }
+type ClientRequest struct {
+	Request      *http.Request
+	Act          string `json:"act"`
+	User         string `json:"user"`
+	Org          string `json:"org"`
+	Orgoid       string `json:"orgoid"`
+	Role         string `json:"role"`
+	NHS          string `json:"nhs"`
+	PID          string `json:"pid"`
+	PIDOrg       string `json:"pidorg"`
+	PIDOID       string `json:"pidoid"`
+	FamilyName   string `json:"familyname"`
+	GivenName    string `json:"givenname"`
+	DOB          string `json:"dob"`
+	Gender       string `json:"gender"`
+	ZIP          string `json:"zip"`
+	Status       string `json:"status"`
+	XDWKey       string `json:"xdwkey"`
+	ID           int    `json:"id"`
+	Task         string `json:"task"`
+	Pathway      string `json:"pathway"`
+	Version      int    `json:"version"`
+	ReturnFormat string `json:"returnformat"`
+}
+type EventMessage struct {
+	Message string
+}
 
 var (
-	TUK_DB_URL      = ""
-	DSUB_BROKER_URL = ""
-	PIX_MANAGER_URL = ""
-	REGIONAL_OID    = ""
-	NHS_OID         = ""
-	SeedRoot        = "1.2.40.0.13.1.1.3542466645."
-	IdSeed          = GetIdIncrementSeed(5)
+	BaseFolder      = ""
+	ConfigFolder    = "configs"
+	CodeSystemFile  = "codesystem.json"
+	TUK_DB_URL      = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
+	DSUB_BROKER_URL = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
+	PIX_MANAGER_URL = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
+	REGIONAL_OID    = "2.16.840.1.113883.2.1.3.31.2.1.1"
+	NHS_OID         = "2.16.840.1.113883.2.1.4.1"
 )
 
-func setOSVars() {
-	TUK_DB_URL = os.Getenv("TUK_DB_URL")
-	PIX_MANAGER_URL = os.Getenv("PIX_MANAGER_URL")
-	REGIONAL_OID = os.Getenv("REGIONAL_OID")
-	NHS_OID = os.Getenv("NHS_OID")
-	DSUB_BROKER_URL = os.Getenv("DSUB_BROKER_URL")
-
-	if TUK_DB_URL == "" {
-		TUK_DB_URL = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
-	}
-	if DSUB_BROKER_URL == "" {
-		DSUB_BROKER_URL = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
-	}
-	if PIX_MANAGER_URL == "" {
-		PIX_MANAGER_URL = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
-	}
-	if NHS_OID == "" {
-		NHS_OID = "2.16.840.1.113883.2.1.4.1"
-	}
-	if REGIONAL_OID == "" {
-		REGIONAL_OID = "2.16.840.1.113883.2.1.3.31.2.1.1"
+func SetNHSOID(nhsoid string) {
+	NHS_OID = nhsoid
+}
+func SetRegionalOID(regionaloid string) {
+	REGIONAL_OID = regionaloid
+}
+func SetBaseFolder(baseFolder string) {
+	BaseFolder = baseFolder
+}
+func SetConfigFolder(configFolder string) {
+	ConfigFolder = configFolder
+}
+func SetCodeSystemFile(csfile string) {
+	CodeSystemFile = csfile
+	if BaseFolder != "" {
+		InitCodeSystem()
 	}
 }
-func validateNotifyMessage(eventMessage string) (DSUBNotifyMessage, error) {
-	v := DSUBNotifyMessage{}
-	if eventMessage == "" {
-		return v, errors.New("body is empty")
-	}
-	notifyElement := GetXMLNodeList(eventMessage, cnst.DSUB_NOTIFY_ELEMENT)
-	if notifyElement == "" {
-		return v, errors.New("unable to locate notify element")
-	}
-	log.Println(notifyElement)
-
-	if err := xml.Unmarshal([]byte(notifyElement), &v); err != nil {
-		return v, err
-	}
-	return v, nil
+func InitCodeSystem() {
+	util.InitCodeSystem(BaseFolder, ConfigFolder, CodeSystemFile)
 }
-func NewDSUBEvent(eventMessage string) error {
-	v, err := validateNotifyMessage(eventMessage)
+func InitLambdaVars() {
+	if os.Getenv("TUK_DB_URL") != "" {
+		TUK_DB_URL = os.Getenv("TUK_DB_URL")
+		log.Printf("Set TUK_DB_URL environment variable - %s", TUK_DB_URL)
+	} else {
+		log.Println("Unable to set TUK_DB_URL environment variable. No Value found!")
+	}
+	if os.Getenv("PIX_MANAGER_URL") != "" {
+		PIX_MANAGER_URL = os.Getenv("PIX_MANAGER_URL")
+		log.Printf("Set PIX_MANAGER_URL environment variable - %s", PIX_MANAGER_URL)
+	} else {
+		log.Println("Unable to set PIX_MANAGER_URL environment variable. No Value found!")
+	}
+	if os.Getenv("PIX_MANAGER_URL") != "" {
+		DSUB_BROKER_URL = os.Getenv("DSUB_BROKER_URL")
+		log.Printf("Set DSUB_BROKER_URL environment variable - %s", DSUB_BROKER_URL)
+	} else {
+		log.Println("Unable to set DSUB_BROKER_URL environment variable. No Value found!")
+	}
+	if os.Getenv("REGIONAL_OID") != "" {
+		REGIONAL_OID = os.Getenv("REGIONAL_OID")
+		log.Printf("Set REGIONAL_OID environment variable - %s", REGIONAL_OID)
+	} else {
+		log.Println("Unable to set REGIONAL_OID environment variable. No Value found!")
+	}
+	if os.Getenv("NHS_OID") != "" {
+		NHS_OID = os.Getenv("NHS_OID")
+		log.Printf("Set NHS_OID environment variable - %s", NHS_OID)
+	} else {
+		log.Println("Unable to set NHS_OID environment variable. No Value found!")
+	}
+}
+func (i *ClientRequest) InitClientRequest() error {
+	if i.Request == nil {
+		return errors.New("clientrequest.request is not set")
+	}
+	log.Printf("Received http %s request", i.Request.Method)
+	i.Request.ParseForm()
+	i.Act = i.Request.FormValue("act")
+	i.User = i.Request.FormValue("user")
+	i.Org = i.Request.FormValue("org")
+	i.Orgoid = util.GetCodeSystemVal(i.Request.FormValue("org"))
+	i.Role = i.Request.FormValue("role")
+	i.NHS = i.Request.FormValue("nhs")
+	i.PID = i.Request.FormValue("pid")
+	i.PIDOrg = i.Request.FormValue("pidorg")
+	i.PIDOID = util.GetCodeSystemVal(i.Request.FormValue("pidorg"))
+	i.FamilyName = i.Request.FormValue("familyname")
+	i.GivenName = i.Request.FormValue("givenname")
+	i.DOB = i.Request.FormValue("dob")
+	i.Gender = i.Request.FormValue("gender")
+	i.ZIP = i.Request.FormValue("zip")
+	i.Status = i.Request.FormValue("status")
+	i.ID = util.GetIntFromString(i.Request.FormValue("id"))
+	i.Task = i.Request.FormValue("task")
+	i.Pathway = i.Request.FormValue("pathway")
+	i.Version = util.GetIntFromString(i.Request.FormValue("version"))
+	i.XDWKey = i.Request.FormValue("xdwkey")
+	i.ReturnFormat = i.Request.Header.Get(cnst.ACCEPT)
+	res2B, _ := json.MarshalIndent(i, "", "  ")
+	log.Printf("Client Request\n%+v", string(res2B))
+	return nil
+}
+func (i *EventMessage) NewEvent() error {
+	dsubNotify, err := i.initDSUBNotifyMessage()
 	if err != nil {
 		return err
 	}
-
-	setOSVars()
-	var slots = v.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject
-	location, err := time.LoadLocation("Europe/London")
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	timeInUTC := time.Now().In(location).String()
-	i := Event{
+	slots := dsubNotify.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject
+	tukevent := Event{
 		EventId:             0,
-		Creationtime:        timeInUTC,
+		Creationtime:        util.Tuk_Time(),
 		DocName:             slots.Name.LocalizedString.Value,
 		ClassCode:           cnst.NO_VALUE,
 		ConfCode:            cnst.NO_VALUE,
@@ -613,21 +687,18 @@ func NewDSUBEvent(eventMessage string) error {
 		Pathway:             cnst.NO_VALUE,
 		Notes:               "None",
 		Version:             "0",
-		BrokerRef:           v.NotificationMessage.SubscriptionReference.Address.Text,
+		BrokerRef:           dsubNotify.NotificationMessage.SubscriptionReference.Address.Text,
 		XDWWorkflowDocument: XDWWorkflowDocument{},
 	}
-	if i.BrokerRef == "" {
+	if tukevent.BrokerRef == "" {
 		return errors.New("no subscription ref found in notification message")
 	}
-	log.Printf("Found Subscription Reference %s. Setting Event state from Notify Message", i.BrokerRef)
-	log.Println("Event Creation Time " + i.Creationtime)
-	log.Println("Set Document Name:" + i.DocName)
+	log.Printf("Found Subscription Reference %s. Setting Event state from Notify Message", tukevent.BrokerRef)
+	tukevent.initTUKEvent(dsubNotify)
 
-	i.populateTUKEvent(v)
-
-	log.Printf("Checking for event subscriptions with Broker Ref %s", i.BrokerRef)
+	log.Printf("Checking for event subscriptions with Broker Ref %s", tukevent.BrokerRef)
 	subs := Subscriptions{Action: "select"}
-	sub := Subscription{BrokerRef: i.BrokerRef}
+	sub := Subscription{BrokerRef: tukevent.BrokerRef}
 	subs.Subscriptions = append(subs.Subscriptions, sub)
 	if err := subs.NewEvent(); err != nil {
 		log.Println(err.Error())
@@ -635,44 +706,63 @@ func NewDSUBEvent(eventMessage string) error {
 	}
 	log.Printf("Event Subscriptions Count : %v", subs.Count)
 	if subs.Count > 0 {
-		log.Printf("Found %s %s Subsription for Broker Ref %s", subs.Subscriptions[1].Pathway, subs.Subscriptions[1].Expression, i.BrokerRef)
-		i.Pathway = subs.Subscriptions[1].Pathway
-		i.Topic = subs.Subscriptions[1].Topic
+		log.Printf("Found %s %s Subsription for Broker Ref %s", subs.Subscriptions[1].Pathway, subs.Subscriptions[1].Expression, tukevent.BrokerRef)
+		tukevent.Pathway = subs.Subscriptions[1].Pathway
+		tukevent.Topic = subs.Subscriptions[1].Topic
 		log.Println("Registering DSUB Notification with Event Service")
 
-		log.Printf("Obtaining NHS ID. Using %s", i.XdsPid+":"+REGIONAL_OID)
-		pat := PIXPatient{PID: i.XdsPid, PIDOID: REGIONAL_OID}
-		if err := pat.NewEvent(); err != nil {
+		log.Printf("Obtaining NHS ID. Using %s", tukevent.XdsPid+":"+REGIONAL_OID)
+		pixmQuery := PIXmQuery{PID: tukevent.XdsPid, PIDOID: REGIONAL_OID}
+		if err := pixmQuery.InitPIXPatient(); err != nil {
 			log.Println(err.Error())
 			return err
+		}
+		if pixmQuery.Count != 1 {
+			return errors.New("no unique patient returned")
 		}
 		evs := Events{
 			Action: "insert",
 		}
-		i.NhsId = pat.NHSID
-		if len(i.NhsId) == 10 {
-			log.Printf("Obtained NHS ID %s", i.NhsId)
-			evs.Events = append(evs.Events, i)
+		tukevent.NhsId = pixmQuery.Response[0].NHSID
+		if len(tukevent.NhsId) == 10 {
+			log.Printf("Obtained NHS ID %s", tukevent.NhsId)
+			evs.Events = append(evs.Events, tukevent)
 			if err := evs.NewEvent(); err != nil {
 				log.Println(err.Error())
 			} else {
 				log.Printf("Persisted Event ID %v", evs.LastInsertId)
 			}
-			log.Printf("Created TUK Event from DSUB Notification of the Publication of Document Type %s - Broker Ref - %s", i.Expression, i.BrokerRef)
-			i.EventId = evs.LastInsertId
-			i.updateEventService(pat)
+			log.Printf("Created TUK Event from DSUB Notification of the Publication of Document Type %s - Broker Ref - %s", tukevent.Expression, tukevent.BrokerRef)
+			tukevent.EventId = evs.LastInsertId
+			tukevent.updateWorkflow(pixmQuery.Response[0])
 		} else {
 			return errors.New("unable to obtain nhs id")
 		}
 	} else {
-		log.Printf("No Subscription found with brokerref = %s. Sending Cancel request to Broker", i.BrokerRef)
-		cancel := DSUBCancel{BrokerRef: i.BrokerRef, UUID: utils.NewUuid()}
+		log.Printf("No Subscription found with brokerref = %s. Sending Cancel request to Broker", tukevent.BrokerRef)
+		cancel := DSUBCancel{BrokerRef: tukevent.BrokerRef, UUID: util.NewUuid()}
 		cancel.NewEvent()
 	}
 
 	return nil
 }
-func (i *Event) updateEventService(pat PIXPatient) {
+func (i *EventMessage) initDSUBNotifyMessage() (DSUBNotifyMessage, error) {
+	dsubNotify := DSUBNotifyMessage{}
+	if i.Message == "" {
+		return dsubNotify, errors.New("message is empty")
+	}
+	notifyElement := util.GetXMLNodeList(i.Message, cnst.DSUB_NOTIFY_ELEMENT)
+	if notifyElement == "" {
+		return dsubNotify, errors.New("unable to locate notify element in received message")
+	}
+	log.Println("DSUB Broker Notify Element")
+	log.Println(notifyElement)
+	if err := xml.Unmarshal([]byte(notifyElement), &dsubNotify); err != nil {
+		return dsubNotify, err
+	}
+	return dsubNotify, nil
+}
+func (i *Event) updateWorkflow(pat PIXPatient) {
 	log.Printf("Updating Event Service %s Workflow for patient %s %s %s", i.Pathway, pat.GivenName, pat.FamilyName, i.NhsId)
 	wfdefs := XDWS{Action: "select"}
 	wfdef := XDW{
@@ -743,7 +833,7 @@ func (i *Event) updateEventService(pat PIXPatient) {
 				log.Println(err.Error())
 			}
 			log.Printf("Updating %s Workflow for NHS ID %s with latest events", i.Pathway, i.NhsId)
-			i.updateWorkflow()
+			i.updateActiveWorkflow()
 		}
 
 	} else {
@@ -751,7 +841,7 @@ func (i *Event) updateEventService(pat PIXPatient) {
 
 	}
 }
-func (i *Event) updateWorkflow() error {
+func (i *Event) updateActiveWorkflow() error {
 	log.Println("Updating Active Workflow")
 
 	if i.XDWWorkflowDocument.WorkflowStatus != "COMPLETE" {
@@ -783,7 +873,6 @@ func (i *Event) updateWorkflow() error {
 // 	}
 // 	i.Events = tukEvents
 // 	sort.Sort(eventsList(i.Events.Events))
-
 // 	log.Printf("Updating %s Workflow Tasks with %v Events", i.XDWWorkflowDocument.WorkflowDefinitionReference, len(i.Events.Events))
 // 	var newVers = false
 // 	for _, ev := range i.Events.Events {
@@ -798,7 +887,6 @@ func (i *Event) updateWorkflow() error {
 // 						i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.AttachedBy = ev.User + " " + ev.Org + " " + ev.Role
 // 						i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.TaskDetails.Status = "REQUESTED"
 // 						i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.TaskDetails.ActualOwner = ev.User + " " + ev.Org + " " + ev.Role
-
 // 						if strings.HasSuffix(wfdoctask.TaskData.Input[inp].Part.AttachmentInfo.AccessType, "XDSregistered") {
 // 							i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.Identifier = ev.RepositoryUniqueId + ":" + ev.XdsDocEntryUid
 // 							i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.HomeCommunityId, _ = tukdb.GetLocalId(constants.XDSDOMAIN)
@@ -808,11 +896,9 @@ func (i *Event) updateWorkflow() error {
 // 							i.newTaskEvent(k, strconv.Itoa(ev.Id), ev.CreationTime, ev.Expression)
 // 						}
 // 						i.XDWWorkflowDocument.WorkflowStatus = "IN_PROGRESS"
-
 // 					}
 // 				}
 // 			}
-
 // 			for oup, output := range i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.Output {
 // 				if ev.Expression == output.Part.Name {
 // 					log.Println("Matched workflow document task " + wfdoctask.TaskData.TaskDetails.ID + " Output Part : " + output.Part.Name + " with Event Expression : " + ev.Expression + " Status : " + wfdoctask.TaskData.TaskDetails.Status)
@@ -822,7 +908,6 @@ func (i *Event) updateWorkflow() error {
 // 						i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.AttachedBy = ev.User + " " + ev.Org + " " + ev.Role
 // 						i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.TaskDetails.ActualOwner = ev.User + " " + ev.Org + " " + ev.Role
 // 						i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.TaskDetails.Status = "IN_PROGRESS"
-
 // 						var tid = Newid()
 // 						if strings.HasSuffix(wfdoctask.TaskData.Output[oup].Part.AttachmentInfo.AccessType, "XDSregistered") {
 // 							i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.Identifier = ev.RepositoryUniqueId + ":" + ev.XdsDocEntryUid
@@ -850,7 +935,6 @@ func (i *Event) updateWorkflow() error {
 // 			}
 // 		}
 // 	}
-
 // 	for task := range i.XDWWorkflowDocument.TaskList.XDWTask {
 // 		if i.XDWWorkflowDocument.TaskList.XDWTask[task].TaskData.TaskDetails.Status != "COMPLETE" {
 // 			if i.isTaskCompleteBehaviorMet(task) {
@@ -867,9 +951,7 @@ func (i *Event) updateWorkflow() error {
 // 	}
 // 	if isWorkflowCompleteBehaviorMet(i) {
 // 		i.XDWWorkflowDocument.WorkflowStatus = "COMPLETE"
-
 // 		tevidstr := strconv.Itoa(int(i.newODDEvent("WORKFLOW", "CLOSE", "All Workflow Completion Behaviour Conditions Met. Workflow Closed")))
-
 // 		docevent := DocumentEvent{}
 // 		docevent.Author = i.User
 // 		docevent.TaskEventIdentifier = tevidstr
@@ -878,7 +960,6 @@ func (i *Event) updateWorkflow() error {
 // 		docevent.PreviousStatus = i.XDWWorkflowDocument.WorkflowStatusHistory.DocumentEvent[len(i.XDWWorkflowDocument.WorkflowStatusHistory.DocumentEvent)-1].ActualStatus
 // 		docevent.ActualStatus = "COMPLETE"
 // 		i.XDWWorkflowDocument.WorkflowStatusHistory.DocumentEvent = append(i.XDWWorkflowDocument.WorkflowStatusHistory.DocumentEvent, docevent)
-
 //			for k := range i.XDWWorkflowDocument.TaskList.XDWTask {
 //				i.XDWWorkflowDocument.TaskList.XDWTask[k].TaskData.TaskDetails.Status = "COMPLETE"
 //			}
@@ -917,7 +998,6 @@ func (i *Event) updateWorkflow() error {
 // 	i.XDWWorkflowDocument.WorkflowStatusHistory.DocumentEvent = append(i.XDWWorkflowDocument.WorkflowStatusHistory.DocumentEvent, docevent)
 // }
 // func (i *Event) newTaskEvent(task int, evid string, evtime string, evtype string) (string, bool) {
-
 //		for _, tev := range i.XDWWorkflowDocument.TaskList.XDWTask[task].TaskEventHistory.TaskEvent {
 //			if tev.ID == evid {
 //				log.Println("Task Event Exists")
@@ -936,12 +1016,13 @@ func (i *Event) updateWorkflow() error {
 //		i.XDWWorkflowDocument.TaskList.XDWTask[task].TaskEventHistory.TaskEvent = append(i.XDWWorkflowDocument.TaskList.XDWTask[task].TaskEventHistory.TaskEvent, nte)
 //		return nextTaskEventId, true
 //	}
+
 func (i *Event) createWorkflow(xdwdef WorkflowDefinition, pat PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s Workflow for NHS ID %s", i.Pathway, i.NhsId)
 	xdwdoc := XDWWorkflowDocument{}
 	var authoroid = "Not Provided"
 	var authorname = i.Org
-	var wfid = Newid()
+	var wfid = util.Newid()
 	if strings.Contains(i.Org, "^") {
 		authoroid = strings.Split(i.Org, "^")[1]
 		authorname = strings.Split(i.Org, "^")[0]
@@ -1033,8 +1114,10 @@ func (i *Event) createWorkflow(xdwdef WorkflowDefinition, pat PIXPatient) XDWWor
 	log.Println(string(b))
 	return xdwdoc
 }
-func (i *Event) populateTUKEvent(v DSUBNotifyMessage) {
-	var slots = v.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject
+func (i *Event) initTUKEvent(dsubNotify DSUBNotifyMessage) {
+	var slots = dsubNotify.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject
+	log.Println("Event Creation Time " + i.Creationtime)
+	log.Println("Set Document Name:" + i.DocName)
 
 	log.Println("Searching for Repository Unique ID")
 	for _, slot := range slots.Slot {
@@ -1261,7 +1344,7 @@ func (i *DSUBCancel) cancelSubscription() error {
 	}
 	return err
 }
-func (i *PIXPatient) NewEvent() error {
+func (i *PIXmQuery) InitPIXPatient() error {
 	url := PIX_MANAGER_URL + "?identifier=" + i.PIDOID + "%7C" + i.PID + "&_format=json&_pretty=true"
 	log.Println("GET Patient URL:" + url)
 	req, _ := http.NewRequest("GET", url, nil)
@@ -1271,7 +1354,6 @@ func (i *PIXPatient) NewEvent() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(2000)*time.Millisecond)
 	defer cancel()
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
-	//resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -1298,50 +1380,54 @@ func (i *PIXPatient) NewEvent() error {
 	log.Printf("%v Patient Entries in Response", rsp.Total)
 	i.Count = rsp.Total
 	if i.Count > 0 {
-		pat := rsp.Entry[0]
-		for _, id := range pat.Resource.Identifier {
-			if id.System == "urn:oid:"+REGIONAL_OID {
-				i.REGID = id.Value
-				i.REGOID = REGIONAL_OID
-				log.Printf("Set Reg ID %s %s", i.REGID, i.REGOID)
+		for cnt := 0; cnt < len(rsp.Entry); cnt++ {
+			rsppat := rsp.Entry[cnt]
+			tukpat := PIXPatient{}
+			for _, id := range rsppat.Resource.Identifier {
+				if id.System == "urn:oid:"+REGIONAL_OID {
+					tukpat.REGID = id.Value
+					tukpat.REGOID = REGIONAL_OID
+					log.Printf("Set Reg ID %s %s", tukpat.REGID, tukpat.REGOID)
+				}
+				if id.Use == "usual" {
+					tukpat.PID = id.Value
+					tukpat.PIDOID = strings.Split(id.System, ":")[2]
+					log.Printf("Set PID %s %s", tukpat.PID, tukpat.PIDOID)
+				}
+				if id.System == "urn:oid:"+NHS_OID {
+					tukpat.NHSID = id.Value
+					tukpat.NHSOID = NHS_OID
+					log.Printf("Set NHS ID %s %s", tukpat.NHSID, tukpat.NHSOID)
+				}
 			}
-			if id.Use == "usual" {
-				i.PID = id.Value
-				i.PIDOID = strings.Split(id.System, ":")[2]
-				log.Printf("Set PID %s %s", i.PID, i.PIDOID)
+			gn := ""
+			for _, name := range rsppat.Resource.Name {
+				for _, n := range name.Given {
+					gn = gn + n + " "
+				}
 			}
-			if id.System == "urn:oid:"+NHS_OID {
-				i.NHSID = id.Value
-				i.NHSOID = NHS_OID
-				log.Printf("Set NHS ID %s %s", i.NHSID, i.NHSOID)
-			}
-		}
-		gn := ""
-		for _, name := range pat.Resource.Name {
-			for _, n := range name.Given {
-				gn = gn + n + " "
-			}
-		}
 
-		i.GivenName = strings.TrimSuffix(gn, " ")
-		i.FamilyName = pat.Resource.Name[0].Family
-		i.BirthDate = strings.ReplaceAll(pat.Resource.BirthDate, "-", "")
-		i.Gender = pat.Resource.Gender
+			tukpat.GivenName = strings.TrimSuffix(gn, " ")
+			tukpat.FamilyName = rsppat.Resource.Name[0].Family
+			tukpat.BirthDate = strings.ReplaceAll(rsppat.Resource.BirthDate, "-", "")
+			tukpat.Gender = rsppat.Resource.Gender
 
-		if len(pat.Resource.Address) > 0 {
-			i.Zip = pat.Resource.Address[0].PostalCode
-			i.Street = pat.Resource.Address[0].Line[0]
-			if len(pat.Resource.Address[0].Line) > 1 {
-				i.Town = pat.Resource.Address[0].Line[1]
+			if len(rsppat.Resource.Address) > 0 {
+				tukpat.Zip = rsppat.Resource.Address[0].PostalCode
+				tukpat.Street = rsppat.Resource.Address[0].Line[0]
+				if len(rsppat.Resource.Address[0].Line) > 1 {
+					tukpat.Town = rsppat.Resource.Address[0].Line[1]
+				}
+				tukpat.City = rsppat.Resource.Address[0].City
+				tukpat.Country = rsppat.Resource.Address[0].Country
 			}
-			i.City = pat.Resource.Address[0].City
-			i.Country = pat.Resource.Address[0].Country
+			i.Response = append(i.Response, tukpat)
+			log.Printf("Added Patient %s to response", tukpat.NHSID)
 		}
-
 	} else {
-		err = errors.New("patient is not registered")
+		log.Println("patient is not registered")
 	}
-	return err
+	return nil
 }
 func (i *XDWS) NewEvent() error {
 	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"xdws")
@@ -1433,89 +1519,6 @@ func newTUKDBRequest(httpMethod string, resource string, body []byte) ([]byte, e
 		}
 	}
 	return nil, err
-}
-
-// returns unique id in format '1.2.40.0.13.1.1.3542466645.20211021090059143.32643'
-// idroot constant - 1.2.40.0.13.1.1.3542466645.
-// + datetime	   - 20211021090059143.
-// + 5 digit seed  - 32643
-// The seed is incremented after each call to newid().
-func Newid() string {
-	id := SeedRoot + DT_yyyyMMddhhmmSSsss() + "." + GetStringFromInt(IdSeed)
-	IdSeed = IdSeed + 1
-	return id
-}
-func GetIdIncrementSeed(len int) int {
-	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, len))
-}
-func DT_yyyyMMddhhmmSSsss() string {
-	return DT_Year() + DT_Month() + DT_Day() + DT_Hour() + DT_Min() + DT_Sec() + strconv.Itoa(DT_MilliSec())
-}
-func GetStringFromInt(i int) string {
-	return strconv.Itoa(i)
-}
-func GetIntFromString(s string) int {
-	i, e := strconv.Atoi(s)
-	if e != nil {
-		log.Println(e.Error())
-	}
-	return i
-}
-func Substr(input string, start int, length int) string {
-	asRunes := []rune(input)
-
-	if start >= len(asRunes) {
-		return ""
-	}
-
-	if start+length > len(asRunes) {
-		length = len(asRunes) - start
-	}
-
-	return string(asRunes[start : start+length])
-}
-func DT_Day() string {
-	return fmt.Sprintf("%02d",
-		time.Now().Local().Day())
-}
-func DT_Hour() string {
-	return fmt.Sprintf("%02d",
-		time.Now().Local().Hour())
-}
-func DT_Min() string {
-	return fmt.Sprintf("%02d", time.Now().Local().Minute())
-}
-func DT_Sec() string {
-	return fmt.Sprintf("%02d",
-		time.Now().Local().Second())
-}
-func DT_MilliSec() int {
-	return GetMilliseconds()
-}
-func GetMilliseconds() int {
-	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, 3))
-}
-func DT_Year() string {
-	return fmt.Sprintf("%d",
-		time.Now().Local().Year())
-}
-func DT_Month() string {
-	return fmt.Sprintf("%02d",
-		time.Now().Local().Month())
-}
-func GetXMLNodeList(message string, node string) string {
-	if strings.Contains(message, node) {
-		var nodeopen = "<" + node
-		var nodeclose = "</" + node + ">"
-		log.Println("Searching for XML Element: " + nodeopen + ">")
-		var start = strings.Index(message, nodeopen)
-		var end = strings.Index(message, nodeclose) + len(nodeclose)
-		m := message[start:end]
-		log.Println("Extracted XML Element Nodelist")
-		return m
-	}
-	log.Println("Message does not contain Element : " + node)
-	return ""
 }
 
 type eventsList []Event
