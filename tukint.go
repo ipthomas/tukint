@@ -561,6 +561,7 @@ type ClientRequest struct {
 	ReturnFormat string `json:"returnformat"`
 }
 type EventMessage struct {
+	Source  string
 	Message string
 }
 
