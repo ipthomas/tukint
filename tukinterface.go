@@ -21,6 +21,83 @@ import (
 	cnst "github.com/ipthomas/tukcnst"
 )
 
+type TUKServiceState struct {
+	LogEnabled          bool   `json:"logenabled"`
+	Paused              bool   `json:"paused"`
+	Scheme              string `json:"scheme"`
+	Host                string `json:"host"`
+	Port                int    `json:"port"`
+	Url                 string `json:"url"`
+	User                string `json:"user"`
+	Password            string `json:"password"`
+	Org                 string `json:"org"`
+	Role                string `json:"role"`
+	POU                 string `json:"pou"`
+	ClaimDialect        string `json:"claimdialect"`
+	ClaimValue          string `json:"claimvalue"`
+	BaseFolder          string `json:"basefolder"`
+	LogFolder           string `json:"logfolder"`
+	ConfigFolder        string `json:"configfolder"`
+	TemplatesFolder     string `json:"templatesfolder"`
+	Secret              string `json:"secret"`
+	Token               string `json:"token"`
+	CertPath            string `json:"certpath"`
+	Certs               string `json:"certs"`
+	Keys                string `json:"keys"`
+	DBSrvc              string `json:"dbsrvc"`
+	STSSrvc             string `json:"stssrvc"`
+	SAMLSrvc            string `json:"samlsrvc"`
+	LoginSrvc           string `json:"loginsrvc"`
+	PIXSrvc             string `json:"pixsrvc"`
+	CacheTimeout        int    `json:"cachetimeout"`
+	CacheEnabled        bool   `json:"cacheenabled"`
+	ContextTimeout      int    `json:"contexttimeout"`
+	TUK_DB_URL          string `json:"tukdburl"`
+	DSUB_Broker_URL     string `json:"dsubbrokerurl"`
+	DSUB_Consumer_URL   string `json:"dsubconsumerurl"`
+	DSUB_Subscriber_URL string `json:"dsubsubscriberurl"`
+	PIXm_URL            string `json:"pixmurl"`
+	XDS_Reg_URL         string `json:"xdsregurl"`
+	XDS_Rep_URL         string `json:"xdsrepurl"`
+	NHS_OID             string `json:"nhsoid"`
+	Regional_OID        string `json:"regionaloid"`
+}
+type Dashboard struct {
+	Total      int
+	Open       int
+	InProgress int
+	Closed     int
+}
+type TmpltWorkflow struct {
+	Created   string
+	NHS       string
+	Pathway   string
+	XDWKey    string
+	Published bool
+	Version   int
+	XDW       XDWWorkflowDocument
+}
+type TmpltWorkflows struct {
+	Count     int
+	Workflows []TmpltWorkflow
+}
+type WorkflowState struct {
+	Events    Events    `json:"events"`
+	XDWS      TUKXDWS   `json:"xdws"`
+	Workflows Workflows `json:"workflows"`
+}
+type TUKXDWS struct {
+	Action       string   `json:"action"`
+	LastInsertId int64    `json:"lastinsertid"`
+	Count        int      `json:"count"`
+	XDW          []TUKXDW `json:"xdws"`
+}
+type TUKXDW struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	IsXDSMeta bool   `json:"isxdsmeta"`
+	XDW       string `json:"xdw"`
+}
 type DSUBSubscribeResponse struct {
 	XMLName        xml.Name `xml:"Envelope"`
 	Text           string   `xml:",chardata"`
