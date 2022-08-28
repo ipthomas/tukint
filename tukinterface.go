@@ -628,6 +628,9 @@ func InitLambdaVars() {
 		log.Println("Unable to set NHS_OID environment variable. No Value found!")
 	}
 }
+func SOAP_XML_Content_Type_EventHeaders() map[string]string {
+	return map[string]string{cnst.CONTENT_TYPE: cnst.SOAP_XML}
+}
 func (i *ClientRequest) InitClientRequest() error {
 	if i.Request == nil {
 		return errors.New("clientrequest.request is not set")
