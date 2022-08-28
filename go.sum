@@ -1,4 +1,4 @@
 github.com/gofrs/uuid v4.2.0+incompatible h1:yyYWMnhkhrKwwr8gAOcOCYxOOscHgDS9yZgBrnJfGa0=
 github.com/gofrs/uuid v4.2.0+incompatible/go.mod h1:b2aQJv3Z4Fp6yNu3cdSllBxTCLRxnplIgP/c0N/04lM=
-github.com/ipthomas/cnst v0.0.0-20220827205504-bfcdc48331cf h1:m7FwjQ6qFt3J6bgxC3XJSbcPqHl+sag/YK9hvoHC4+k=
-github.com/ipthomas/cnst v0.0.0-20220827205504-bfcdc48331cf/go.mod h1:jkGw16uCtVByQU1Q0WPDo+4rXqmYqiXFWbT98azk2JM=
+github.com/ipthomas/tukcnst v1.0.0 h1:1jI9uxBIBPgSBEw/FOmWEfZhRJ2eTXSElxu174oB/SQ=
+github.com/ipthomas/tukcnst v1.0.0/go.mod h1:ciOdJbw8hryjilsWjN0vhtF3ZbSfEKUd7wfzU0IZ2X8=

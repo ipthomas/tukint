@@ -1,2 +1,0 @@
-# cnst
-Event Service Constants

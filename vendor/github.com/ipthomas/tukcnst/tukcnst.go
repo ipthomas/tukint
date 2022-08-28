@@ -3,9 +3,10 @@
  * file 'LICENSE', which is part of this source code package.
  */
 
-package tukconstants
+package tukcnst
 
 const (
+	TEST1                           = "test"
 	NO_VALUE                        = "Not Provided"
 	TUK_DB_TABLE_SUBSCRIPTIONS      = "subscriptions"
 	TUK_DB_TABLE_XDWS               = "xdws"

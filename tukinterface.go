@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
-	cnst "github.com/ipthomas/cnst"
+	cnst "github.com/ipthomas/tukcnst"
 )
 
 type DSUBSubscribeResponse struct {
