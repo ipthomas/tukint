@@ -12,9 +12,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	cnst "github.com/ipthomas/tukcnst"
@@ -566,14 +568,18 @@ type EventMessage struct {
 }
 
 var (
-	BaseFolder      = ""
-	ConfigFolder    = "configs"
-	CodeSystemFile  = "codesystem.json"
-	TUK_DB_URL      = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
-	DSUB_BROKER_URL = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
-	PIX_MANAGER_URL = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
-	REGIONAL_OID    = "2.16.840.1.113883.2.1.3.31.2.1.1"
-	NHS_OID         = "2.16.840.1.113883.2.1.4.1"
+	BaseFolder              = ""
+	LogFolder               = BaseFolder + "/logs/"
+	ConfigFolder            = BaseFolder + "/configs/"
+	CodeSystemFile          = "codesystem.json"
+	TUK_DB_URL              = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
+	DSUB_BROKER_URL         = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
+	PIX_MANAGER_URL         = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
+	REGIONAL_OID            = "2.16.840.1.113883.2.1.3.31.2.1.1"
+	NHS_OID                 = "2.16.840.1.113883.2.1.4.1"
+	DSUB_ACK_TEMPLATE       = "<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'><SOAP-ENV:Body/></SOAP-ENV:Envelope>"
+	DSUB_SUBSCRIBE_TEMPLATE = "{{define \"subscribe\"}}<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:wsa='http://www.w3.org/2005/08/addressing'><SOAP-ENV:Header><wsa:Action SOAP-ENV:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/NotificationProducer/SubscribeRequest</wsa:Action><wsa:MessageID>urn:uuid:{{newuuid}}</wsa:MessageID><wsa:ReplyTo SOAP-ENV:mustUnderstand='true'><wsa:Address>http://www.w3.org/2005/08/addressing/anonymous</wsa:Address></wsa:ReplyTo><wsa:To>{{.BrokerUrl}}</wsa:To></SOAP-ENV:Header><SOAP-ENV:Body><wsnt:Subscribe xmlns:wsnt='http://docs.oasis-open.org/wsn/b-2' xmlns:a='http://www.w3.org/2005/08/addressing' xmlns:rim='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:wsa='http://www.w3.org/2005/08/addressing'><wsnt:ConsumerReference><wsa:Address>{{.ConsumerUrl}}</wsa:Address></wsnt:ConsumerReference><wsnt:Filter><wsnt:TopicExpression Dialect='http://docs.oasis-open.org/wsn/t-1/TopicExpression/Simple'>ihe:FullDocumentEntry</wsnt:TopicExpression><rim:AdhocQuery id='urn:uuid:742790e0-aba6-43d6-9f1f-e43ed9790b79'><rim:Slot name='{{.Topic}}'><rim:ValueList><rim:Value>('{{.Expression}}')</rim:Value></rim:ValueList></rim:Slot></rim:AdhocQuery></wsnt:Filter></wsnt:Subscribe></SOAP-ENV:Body></SOAP-ENV:Envelope>{{end}}"
+	DSUB_CANCEL_TEMPLATE    = "{{define \"cancel\"}}<soap:Envelope xmlns:soap='http://www.w3.org/2003/05/soap-envelope'><soap:Header><Action xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeRequest</Action><MessageID xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>urn:uuid:{{.UUID}}</MessageID><To xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>{{.BrokerRef}}</To><ReplyTo xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'><Address>http://www.w3.org/2005/08/addressing/anonymous</Address></ReplyTo></soap:Header><soap:Body><Unsubscribe xmlns='http://docs.oasis-open.org/wsn/b-2' xmlns:ns2='http://www.w3.org/2005/08/addressing' xmlns:ns3='http://docs.oasis-open.org/wsrf/bf-2' xmlns:ns4='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:ns5='urn:oasis:names:tc:ebxml-regrep:xsd:rs:3.0' xmlns:ns6='urn:oasis:names:tc:ebxml-regrep:xsd:lcm:3.0' xmlns:ns7='http://docs.oasis-open.org/wsn/t-1' xmlns:ns8='http://docs.oasis-open.org/wsrf/r-2'/></soap:Body></soap:Envelope>{{end}}"
 )
 
 func Set_AWS_Env_Vars(dburl string, brokerurl string, pixurl string, nhsoid string, regoid string) {
@@ -601,14 +607,20 @@ func SetRegionalOID(regionaloid string) {
 func SetBaseFolder(baseFolder string) {
 	BaseFolder = baseFolder
 }
+func SetLogFolder(logFolder string) {
+	LogFolder = BaseFolder + "/" + logFolder + "/"
+}
 func SetConfigFolder(configFolder string) {
-	ConfigFolder = configFolder
+	ConfigFolder = BaseFolder + "/" + configFolder + "/"
 }
 func SetCodeSystemFile(csfile string) {
 	CodeSystemFile = csfile
 	if BaseFolder != "" {
 		InitCodeSystem()
 	}
+}
+func InitLog() {
+
 }
 func InitCodeSystem() {
 	util.InitCodeSystem(BaseFolder, ConfigFolder, CodeSystemFile)
@@ -648,6 +660,72 @@ func initLambdaVars() {
 func SOAP_XML_Content_Type_EventHeaders() map[string]string {
 	return map[string]string{cnst.CONTENT_TYPE: cnst.SOAP_XML}
 }
+func NewHTTPServer(resourceURL string, port string) {
+	if resourceURL == "" {
+		resourceURL = "/eventservice"
+	}
+	if port == "" {
+		port = ":80"
+	} else {
+		if !strings.HasPrefix(port, ":") {
+			port = ":" + port
+		}
+	}
+	hn, _ := os.Hostname()
+	http.HandleFunc(resourceURL, writeResponseHeaders(route_TUK_Server_Request))
+	log.Printf("Initialised HTTP Server - Listening on http://%s/%s%s", hn, resourceURL, port)
+	monitorApp()
+	log.Fatal(http.ListenAndServe(port, nil))
+}
+func monitorApp() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		signalType := <-ch
+		signal.Stop(ch)
+		fmt.Println("")
+		fmt.Println("***")
+		fmt.Println("Exit command received. Exiting...")
+		exitcode := 0
+		switch signalType {
+		case os.Interrupt:
+			log.Println("FATAL: CTRL+C pressed")
+		case syscall.SIGTERM:
+			log.Println("FATAL: SIGTERM detected")
+			exitcode = 1
+		}
+		os.Exit(exitcode)
+	}()
+}
+func writeResponseHeaders(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Server", "Tiani_Spirit_UK")
+		if r.Header.Get(cnst.ACCEPT) == cnst.APPLICATION_XML {
+			w.Header().Set(cnst.CONTENT_TYPE, cnst.APPLICATION_XML)
+		} else if r.Header.Get(cnst.ACCEPT) == cnst.APPLICATION_JSON {
+			w.Header().Set(cnst.CONTENT_TYPE, cnst.APPLICATION_JSON)
+		} else if r.Header.Get(cnst.ACCEPT) == cnst.ALL {
+			w.Header().Set(cnst.CONTENT_TYPE, cnst.TEXT_HTML)
+		} else {
+			w.Header().Set(cnst.CONTENT_TYPE, cnst.TEXT_HTML)
+		}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "accept, Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+		fn(w, r)
+	}
+}
+func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
+	log.Printf("Received http %s request", r.Method)
+	req := ClientRequest{Request: r}
+	if err := req.InitClientRequest(); err == nil {
+		res2B, _ := json.MarshalIndent(req, "", "  ")
+		log.Printf("Client Request\n%+v", string(res2B))
+		rsp.Write([]byte(req.processClientRequest()))
+	}
+}
 func (i *ClientRequest) InitClientRequest() error {
 	if i.Request == nil {
 		return errors.New("clientrequest.request is not set")
@@ -678,6 +756,166 @@ func (i *ClientRequest) InitClientRequest() error {
 	res2B, _ := json.MarshalIndent(i, "", "  ")
 	log.Printf("Client Request\n%+v", string(res2B))
 	return nil
+}
+func (req *ClientRequest) processClientRequest() string {
+	log.Println("Processing Request")
+	switch req.Act {
+	case "dashboard":
+		return req.NewDashboardRequest()
+	case cnst.WORKFLOWS:
+		return req.NewWorkflowsRequest()
+	case cnst.WORKFLOW:
+		return req.NewWorkflowRequest()
+	case "task":
+		return req.NewTaskRequest()
+	}
+	return "Nothing to process"
+}
+func (i *ClientRequest) NewTaskRequest() string {
+	if i.ID < 1 || i.Pathway == "" || i.NHS == "" {
+		return "Invalid request. Task ID, Pathway and NHS ID are required"
+	}
+	xdw := XDWWorkflowDocument{}
+	wfs := Workflows{Action: cnst.SELECT}
+	wf := Workflow{XDW_Key: i.XDWKey, Version: i.Version}
+
+	wfs.Workflows = append(wfs.Workflows, wf)
+	if err := wfs.NewEvent(); err != nil {
+		log.Println(err.Error())
+		return err.Error()
+	}
+	if wfs.Count != 1 {
+		return "No Workflow found for xdwkey = " + i.XDWKey
+	}
+	if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &xdw); err != nil {
+		log.Println(err.Error())
+		return err.Error()
+	}
+	type itmplt struct {
+		TaskId string
+		XDW    XDWWorkflowDocument
+	}
+	it := itmplt{TaskId: util.GetStringFromInt(i.ID), XDW: xdw}
+	var b bytes.Buffer
+	err := HtmlTemplates.ExecuteTemplate(&b, "snip_workflow_task", it)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return b.String()
+}
+func (i *ClientRequest) NewWorkflowsRequest() string {
+	tmpltwfs := TmpltWorkflows{}
+	wfs := Workflows{Action: cnst.SELECT}
+	wf := Workflow{}
+
+	wfs.Workflows = append(wfs.Workflows, wf)
+	if err := wfs.NewEvent(); err != nil {
+		log.Println(err.Error())
+		return err.Error()
+	}
+	log.Printf("Processing %v workflows", wfs.Count)
+	for _, wf := range wfs.Workflows {
+
+		if wf.Id > 0 {
+			xdw, err := newXDWWorkflowDocument(wf)
+			if err != nil {
+				continue
+			}
+			tmpltworkflow := TmpltWorkflow{}
+			if i.Status != "" {
+				log.Printf("Obtaining Workflows with status = %s", i.Status)
+				if strings.EqualFold(xdw.WorkflowStatus, i.Status) {
+					tmpltworkflow.Created = xdw.EffectiveTime.Value
+					tmpltworkflow.Published = wf.Published
+					tmpltworkflow.Version = wf.Version
+					tmpltworkflow.XDWKey = wf.XDW_Key
+					tmpltworkflow.Pathway, tmpltworkflow.NHS = util.SplitXDWKey(tmpltworkflow.XDWKey)
+					tmpltworkflow.XDW = xdw
+					tmpltwfs.Workflows = append(tmpltwfs.Workflows, tmpltworkflow)
+					tmpltwfs.Count = tmpltwfs.Count + 1
+					log.Printf("Including Workflow %s - Status %s", wf.XDW_Key, xdw.WorkflowStatus)
+				}
+			} else {
+				tmpltworkflow.Created = wf.Created
+				tmpltworkflow.Published = wf.Published
+				tmpltworkflow.Version = wf.Version
+				tmpltworkflow.XDWKey = wf.XDW_Key
+				tmpltworkflow.Pathway, tmpltworkflow.NHS = util.SplitXDWKey(tmpltworkflow.XDWKey)
+				tmpltworkflow.XDW = xdw
+				tmpltwfs.Workflows = append(tmpltwfs.Workflows, tmpltworkflow)
+				tmpltwfs.Count = tmpltwfs.Count + 1
+				log.Printf("Including Workflow %s - Status %s", wf.XDW_Key, xdw.WorkflowStatus)
+			}
+		}
+	}
+	var b bytes.Buffer
+	err := HtmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOWS, tmpltwfs)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	log.Printf("Returning %v Workflows", tmpltwfs.Count)
+	return b.String()
+}
+func (i *ClientRequest) NewWorkflowRequest() string {
+	if i.XDWKey == "" && (i.Pathway == "" && i.NHS == "") {
+		return "Invalid request. Either xdwkey or Both Pathway and NHS ID are required"
+	}
+	if i.XDWKey == "" {
+		i.XDWKey = strings.ToUpper(i.Pathway) + i.NHS
+	}
+	xdw := XDWWorkflowDocument{}
+	wfs := Workflows{Action: cnst.SELECT}
+	wf := Workflow{XDW_Key: i.XDWKey, Version: i.Version}
+
+	wfs.Workflows = append(wfs.Workflows, wf)
+	wfs.NewEvent()
+
+	if wfs.Count != 1 {
+		return "No Workflow Found with XDW Key - " + i.XDWKey
+	}
+	json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &xdw)
+	var b bytes.Buffer
+	err := HtmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOW, xdw)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	log.Printf("Returning %v Workflow", xdw.WorkflowDefinitionReference)
+	return b.String()
+}
+func (i *ClientRequest) NewDashboardRequest() string {
+	dashboard := Dashboard{}
+	wfs := Workflows{Action: cnst.SELECT}
+	wfs.Workflows = append(wfs.Workflows, Workflow{})
+	wfs.NewEvent()
+	log.Printf("Processing %v workflows", wfs.Count)
+	for _, wf := range wfs.Workflows {
+		if wf.Id != 0 {
+			log.Println("Processing " + wf.XDW_Key + " Workflow")
+			dashboard.Total = dashboard.Total + 1
+			xdw, err := newXDWWorkflowDocument(wf)
+			if err != nil {
+				continue
+			}
+			json.Unmarshal([]byte(wf.XDW_Doc), &xdw)
+			log.Printf("Workflow Created on %s for Patient NHS ID %s", xdw.EffectiveTime.Value, xdw.Patient.ID.Extension)
+			log.Printf("Workflow Status %s", xdw.WorkflowStatus)
+			switch xdw.WorkflowStatus {
+			case "OPEN":
+				dashboard.Open = dashboard.Open + 1
+			case "IN_PROGRESS":
+				dashboard.InProgress = dashboard.InProgress + 1
+			case "COMPLETE":
+				dashboard.Closed = dashboard.Closed + 1
+			}
+		}
+	}
+
+	var b bytes.Buffer
+	err := HtmlTemplates.ExecuteTemplate(&b, "dashboardwidget", dashboard)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return b.String()
 }
 func (i *EventMessage) NewDSUBBrokerEvent() error {
 	initLambdaVars()
@@ -1271,65 +1509,36 @@ func (i *Event) initTUKEvent(dsubNotify DSUBNotifyMessage) {
 	log.Println("Parsed DSUB Notify Message")
 }
 func NewDSUBAcknowledgement() []byte {
-	return []byte("<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'><SOAP-ENV:Body/></SOAP-ENV:Envelope>")
+	return []byte(DSUB_ACK_TEMPLATE)
 }
 func (i *DSUBSubscribe) NewEvent() error {
-	reqMsg := "{{define \"subscribe\"}}<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:wsa='http://www.w3.org/2005/08/addressing'><SOAP-ENV:Header><wsa:Action SOAP-ENV:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/NotificationProducer/SubscribeRequest</wsa:Action><wsa:MessageID>urn:uuid:{{newuuid}}</wsa:MessageID><wsa:ReplyTo SOAP-ENV:mustUnderstand='true'><wsa:Address>http://www.w3.org/2005/08/addressing/anonymous</wsa:Address></wsa:ReplyTo><wsa:To>{{.BrokerUrl}}</wsa:To></SOAP-ENV:Header><SOAP-ENV:Body><wsnt:Subscribe xmlns:wsnt='http://docs.oasis-open.org/wsn/b-2' xmlns:a='http://www.w3.org/2005/08/addressing' xmlns:rim='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:wsa='http://www.w3.org/2005/08/addressing'><wsnt:ConsumerReference><wsa:Address>{{.ConsumerUrl}}</wsa:Address></wsnt:ConsumerReference><wsnt:Filter><wsnt:TopicExpression Dialect='http://docs.oasis-open.org/wsn/t-1/TopicExpression/Simple'>ihe:FullDocumentEntry</wsnt:TopicExpression><rim:AdhocQuery id='urn:uuid:742790e0-aba6-43d6-9f1f-e43ed9790b79'><rim:Slot name='{{.Topic}}'><rim:ValueList><rim:Value>('{{.Expression}}')</rim:Value></rim:ValueList></rim:Slot></rim:AdhocQuery></wsnt:Filter></wsnt:Subscribe></SOAP-ENV:Body></SOAP-ENV:Envelope>{{end}}"
-	tmplt, err := template.New("subscribe").Parse(reqMsg)
+	var err error
+	var tmplt *template.Template
+	if tmplt, err = template.New(cnst.SUBSCRIBE).Parse(DSUB_SUBSCRIBE_TEMPLATE); err == nil {
+		var b bytes.Buffer
+		if err = tmplt.Execute(&b, i); err == nil {
+			i.BrokerUrl = DSUB_BROKER_URL
+			i.Request = b.Bytes()
+			var resp *http.Response
+			var rsp []byte
+			if resp, err = newSOAPRequest(i.BrokerUrl, cnst.SOAP_ACTION_SUBSCRIBE_REQUEST, i.Request); err == nil {
+				if rsp, err = io.ReadAll(resp.Body); err == nil {
+					subrsp := DSUBSubscribeResponse{}
+					if err = xml.Unmarshal(rsp, &subrsp); err == nil {
+						i.BrokerRef = subrsp.Body.SubscribeResponse.SubscriptionReference.Address
+						log.Printf("Broker Response. Broker Ref :  %s", subrsp.Body.SubscribeResponse.SubscriptionReference.Address)
+					}
+				}
+			}
+		}
+	}
 	if err != nil {
 		log.Println(err.Error())
-		return err
 	}
-	var b bytes.Buffer
-	err = tmplt.Execute(&b, i)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	i.Request = b.Bytes()
-	err = i.createSubscription()
-	if err != nil {
-		log.Println(err.Error())
-	}
-	return err
-}
-func (i *DSUBSubscribe) createSubscription() error {
-	if i.BrokerUrl == "" {
-		i.BrokerUrl = DSUB_BROKER_URL
-	}
-	var resp *http.Response
-	req, err := http.NewRequest(http.MethodPost, i.BrokerUrl, strings.NewReader(string(i.Request)))
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	req.Header.Set(cnst.SOAP_ACTION, cnst.SOAP_ACTION_SUBSCRIBE_REQUEST)
-	req.Header.Set(cnst.CONTENT_TYPE, cnst.SOAP_XML)
-	req.Header.Set(cnst.ACCEPT, cnst.ALL)
-	req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000))
-	defer cancel()
-	resp, err = http.DefaultClient.Do(req.WithContext(ctx))
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	rsp, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	subrsp := DSUBSubscribeResponse{}
-	if err := xml.Unmarshal(rsp, &subrsp); err != nil {
-		log.Println(err.Error())
-	}
-	i.BrokerRef = subrsp.Body.SubscribeResponse.SubscriptionReference.Address
-	log.Printf("Broker Response. Broker Ref :  %s", subrsp.Body.SubscribeResponse.SubscriptionReference.Address)
 	return err
 }
 func (i *DSUBCancel) NewEvent() error {
-	reqMsg := "{{define \"cancel\"}}<soap:Envelope xmlns:soap='http://www.w3.org/2003/05/soap-envelope'><soap:Header><Action xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeRequest</Action><MessageID xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>urn:uuid:{{.UUID}}</MessageID><To xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>{{.BrokerRef}}</To><ReplyTo xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'><Address>http://www.w3.org/2005/08/addressing/anonymous</Address></ReplyTo></soap:Header><soap:Body><Unsubscribe xmlns='http://docs.oasis-open.org/wsn/b-2' xmlns:ns2='http://www.w3.org/2005/08/addressing' xmlns:ns3='http://docs.oasis-open.org/wsrf/bf-2' xmlns:ns4='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:ns5='urn:oasis:names:tc:ebxml-regrep:xsd:rs:3.0' xmlns:ns6='urn:oasis:names:tc:ebxml-regrep:xsd:lcm:3.0' xmlns:ns7='http://docs.oasis-open.org/wsn/t-1' xmlns:ns8='http://docs.oasis-open.org/wsrf/r-2'/></soap:Body></soap:Envelope>{{end}}"
-	tmplt, err := template.New("cancel").Parse(reqMsg)
+	tmplt, err := template.New(cnst.CANCEL).Parse(DSUB_CANCEL_TEMPLATE)
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -1369,7 +1578,7 @@ func (i *DSUBCancel) cancelSubscription() error {
 func (i *PIXmQuery) InitPIXPatient() error {
 	url := PIX_MANAGER_URL + "?identifier=" + i.PIDOID + "%7C" + i.PID + "&_format=json&_pretty=true"
 	log.Println("GET Patient URL:" + url)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest(cnst.HTTP_GET, url, nil)
 	req.Header.Set(cnst.CONTENT_TYPE, cnst.APPLICATION_JSON)
 	req.Header.Set(cnst.ACCEPT, cnst.ALL)
 	req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
@@ -1508,23 +1717,20 @@ func (i *IDMaps) NewEvent() error {
 }
 func getHttpMethod(action string) string {
 	switch action {
-	case "select":
-		return "GET"
+	case cnst.SELECT:
+		return cnst.HTTP_GET
 	default:
-		return "POST"
+		return cnst.HTTP_POST
 	}
 }
 func newTUKDBRequest(httpMethod string, resource string, body []byte) ([]byte, error) {
-	if TUK_DB_URL == "" {
-		TUK_DB_URL = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
-	}
 	client := &http.Client{}
 	req, err := http.NewRequest(httpMethod, TUK_DB_URL+resource, bytes.NewBuffer(body))
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
-	req.Header.Add("Content-Type", "application/json; charset=utf-8")
+	req.Header.Add(cnst.CONTENT_TYPE, cnst.APPLICATION_JSON_CHARSET_UTF_8)
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println(err)
@@ -1541,6 +1747,21 @@ func newTUKDBRequest(httpMethod string, resource string, body []byte) ([]byte, e
 		}
 	}
 	return nil, err
+}
+func newSOAPRequest(url string, soapAction string, body []byte) (*http.Response, error) {
+	var err error
+	var req *http.Request
+	var resp *http.Response
+	if req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(string(body))); err == nil {
+		req.Header.Set(cnst.SOAP_ACTION, soapAction)
+		req.Header.Set(cnst.CONTENT_TYPE, cnst.SOAP_XML)
+		req.Header.Set(cnst.ACCEPT, cnst.ALL)
+		req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000))
+		defer cancel()
+		resp, err = http.DefaultClient.Do(req.WithContext(ctx))
+	}
+	return resp, err
 }
 
 type eventsList []Event
