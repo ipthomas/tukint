@@ -613,36 +613,36 @@ func SetCodeSystemFile(csfile string) {
 func InitCodeSystem() {
 	util.InitCodeSystem(BaseFolder, ConfigFolder, CodeSystemFile)
 }
-func InitLambdaVars() {
+func initLambdaVars() {
 	if os.Getenv("TUK_DB_URL") != "" {
 		TUK_DB_URL = os.Getenv("TUK_DB_URL")
-		log.Printf("Set TUK_DB_URL environment variable - %s", TUK_DB_URL)
+		log.Printf("Set TUK_DB_URL %s from AWS environment variable", TUK_DB_URL)
 	} else {
-		log.Println("TUK_DB_URL environment variable is empty")
+		log.Println("AWS TUK_DB_URL environment variable is empty")
 	}
 	if os.Getenv("PIX_MANAGER_URL") != "" {
 		PIX_MANAGER_URL = os.Getenv("PIX_MANAGER_URL")
-		log.Printf("Set PIX_MANAGER_URL environment variable - %s", PIX_MANAGER_URL)
+		log.Printf("Set PIX_MANAGER_URL %s from AWS environment variable", PIX_MANAGER_URL)
 	} else {
-		log.Println("PIX_MANAGER_URL environment variable is empty")
+		log.Println("AWS PIX_MANAGER_URL environment variable is empty")
 	}
 	if os.Getenv("DSUB_BROKER_URL") != "" {
 		DSUB_BROKER_URL = os.Getenv("DSUB_BROKER_URL")
-		log.Printf("Set DSUB_BROKER_URL environment variable - %s", DSUB_BROKER_URL)
+		log.Printf("Set DSUB_BROKER_URL %s from AWS environment variable", DSUB_BROKER_URL)
 	} else {
-		log.Println("DSUB_BROKER_URL environment variable is empty")
+		log.Println("AWS DSUB_BROKER_URL environment variable is empty")
 	}
 	if os.Getenv("REGIONAL_OID") != "" {
 		REGIONAL_OID = os.Getenv("REGIONAL_OID")
-		log.Printf("Set REGIONAL_OID environment variable - %s", REGIONAL_OID)
+		log.Printf("Set REGIONAL_OID %s from AWS environment variable", REGIONAL_OID)
 	} else {
-		log.Println("REGIONAL_OID environment variable is empty")
+		log.Println("AWS REGIONAL_OID environment variable is empty")
 	}
 	if os.Getenv("NHS_OID") != "" {
 		NHS_OID = os.Getenv("NHS_OID")
-		log.Printf("Set NHS_OID environment variable - %s", NHS_OID)
+		log.Printf("Set NHS_OID %s from AWS environment variable", NHS_OID)
 	} else {
-		log.Println("NHS_OID environment variable is empty")
+		log.Println("AWS NHS_OID environment variable is empty")
 	}
 }
 func SOAP_XML_Content_Type_EventHeaders() map[string]string {
@@ -680,7 +680,7 @@ func (i *ClientRequest) InitClientRequest() error {
 	return nil
 }
 func (i *EventMessage) NewDSUBBrokerEvent() error {
-	InitLambdaVars()
+	initLambdaVars()
 	log.Printf("Received DSUB Broker Event Message\n%s", i.Message)
 	dsubNotify, err := i.initDSUBNotifyMessage()
 	if err != nil {
