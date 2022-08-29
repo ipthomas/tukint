@@ -576,6 +576,22 @@ var (
 	NHS_OID         = "2.16.840.1.113883.2.1.4.1"
 )
 
+func Set_AWS_Env_Vars(dburl string, brokerurl string, pixurl string, nhsoid string, regoid string) {
+	TUK_DB_URL = dburl
+	DSUB_BROKER_URL = brokerurl
+	PIX_MANAGER_URL = pixurl
+	NHS_OID = nhsoid
+	REGIONAL_OID = regoid
+}
+func SetTUKDBURL(dburl string) {
+	TUK_DB_URL = dburl
+}
+func SetDSUBBrokerURL(brokerurl string) {
+	DSUB_BROKER_URL = brokerurl
+}
+func SetPIXURL(pixurl string) {
+	PIX_MANAGER_URL = pixurl
+}
 func SetNHSOID(nhsoid string) {
 	NHS_OID = nhsoid
 }
@@ -602,31 +618,31 @@ func InitLambdaVars() {
 		TUK_DB_URL = os.Getenv("TUK_DB_URL")
 		log.Printf("Set TUK_DB_URL environment variable - %s", TUK_DB_URL)
 	} else {
-		log.Println("Unable to set TUK_DB_URL environment variable. No Value found!")
+		log.Println("TUK_DB_URL environment variable is empty")
 	}
 	if os.Getenv("PIX_MANAGER_URL") != "" {
 		PIX_MANAGER_URL = os.Getenv("PIX_MANAGER_URL")
 		log.Printf("Set PIX_MANAGER_URL environment variable - %s", PIX_MANAGER_URL)
 	} else {
-		log.Println("Unable to set PIX_MANAGER_URL environment variable. No Value found!")
+		log.Println("PIX_MANAGER_URL environment variable is empty")
 	}
 	if os.Getenv("DSUB_BROKER_URL") != "" {
 		DSUB_BROKER_URL = os.Getenv("DSUB_BROKER_URL")
 		log.Printf("Set DSUB_BROKER_URL environment variable - %s", DSUB_BROKER_URL)
 	} else {
-		log.Println("Unable to set DSUB_BROKER_URL environment variable. No Value found!")
+		log.Println("DSUB_BROKER_URL environment variable is empty")
 	}
 	if os.Getenv("REGIONAL_OID") != "" {
 		REGIONAL_OID = os.Getenv("REGIONAL_OID")
 		log.Printf("Set REGIONAL_OID environment variable - %s", REGIONAL_OID)
 	} else {
-		log.Println("Unable to set REGIONAL_OID environment variable. No Value found!")
+		log.Println("REGIONAL_OID environment variable is empty")
 	}
 	if os.Getenv("NHS_OID") != "" {
 		NHS_OID = os.Getenv("NHS_OID")
 		log.Printf("Set NHS_OID environment variable - %s", NHS_OID)
 	} else {
-		log.Println("Unable to set NHS_OID environment variable. No Value found!")
+		log.Println("NHS_OID environment variable is empty")
 	}
 }
 func SOAP_XML_Content_Type_EventHeaders() map[string]string {
@@ -663,7 +679,9 @@ func (i *ClientRequest) InitClientRequest() error {
 	log.Printf("Client Request\n%+v", string(res2B))
 	return nil
 }
-func (i *EventMessage) NewEvent() error {
+func (i *EventMessage) NewDSUBBrokerEvent() error {
+	InitLambdaVars()
+	log.Printf("Received DSUB Broker Event Message\n%s", i.Message)
 	dsubNotify, err := i.initDSUBNotifyMessage()
 	if err != nil {
 		return err

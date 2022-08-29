@@ -1,8 +1,10 @@
 package tukutil
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -16,8 +18,22 @@ var (
 	CodeSystem = make(map[string]string)
 )
 
-func InitCodeSystem(codeSystem map[string]string) {
-	CodeSystem = codeSystem
+func SetCodeSystem(cs map[string]string) {
+	CodeSystem = cs
+}
+
+func InitCodeSystem(basepath string, configFolder string, codesystemFile string) error {
+	file, err := os.Open(basepath + "/" + configFolder + "/" + codesystemFile)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	if err = json.NewDecoder(file).Decode(&CodeSystem); err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	log.Printf("Loaded %v code system key values", len(CodeSystem))
+	return nil
 }
 func GetCodeSystemVal(key string) string {
 	val, ok := CodeSystem[key]
