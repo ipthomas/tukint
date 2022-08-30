@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,16 +15,46 @@ import (
 
 var (
 	SeedRoot   = "1.2.40.0.13.1.1.3542466645."
-	IdSeed     = GetIdIncrementSeed(5)
+	IdSeed     = getIdIncrementSeed(5)
 	CodeSystem = make(map[string]string)
 )
 
+// TemplateFuncMap returns a functionMap of tukutils for use in templates
+func TemplateFuncMap() template.FuncMap {
+	return template.FuncMap{
+		"dtday":       Tuk_Day,
+		"dtmonth":     Tuk_Month,
+		"dtyear":      Tuk_Year,
+		"mappedid":    GetCodeSystemVal,
+		"prettytime":  PrettyTime,
+		"newUuid":     NewUuid,
+		"newid":       Newid,
+		"splitxdwkey": SplitXDWKey,
+		"tuktime":     Tuk_Time,
+	}
+}
+
+// SplitXDWKey takes a string input (xdw key) and returns the pathway and nhs id for the xdw
+func SplitXDWKey(xdwkey string) (string, string) {
+	var pwy string
+	var nhs string
+	if len(xdwkey) > 10 {
+		log.Println("Parsing XDWKey for Pathway and NHS ID")
+		pwy = xdwkey[:len(xdwkey)-10]
+		nhs = strings.TrimPrefix(xdwkey, pwy)
+	}
+	log.Printf("Pathway = %s NHS ID = %s", pwy, nhs)
+	return pwy, nhs
+}
+
+// SetCodeSystem takes a map input and sets the codesystem map with the input
 func SetCodeSystem(cs map[string]string) {
 	CodeSystem = cs
 }
 
-func InitCodeSystem(basepath string, configFolder string, codesystemFile string) error {
-	file, err := os.Open(basepath + "/" + configFolder + "/" + codesystemFile)
+// InitCodeSystem loads the codesystem json file and sets the codesystem map from the json file values
+func InitCodeSystem(codesystemFile string) error {
+	file, err := os.Open(codesystemFile)
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -35,6 +66,8 @@ func InitCodeSystem(basepath string, configFolder string, codesystemFile string)
 	log.Printf("Loaded %v code system key values", len(CodeSystem))
 	return nil
 }
+
+// GetCodeSystemVal takes a string input (key) and returns the string value corresponding to the input (key) from the codesystem
 func GetCodeSystemVal(key string) string {
 	val, ok := CodeSystem[key]
 	if ok {
@@ -47,14 +80,20 @@ func GetCodeSystemVal(key string) string {
 // idroot constant - 1.2.40.0.13.1.1.3542466645.
 // + datetime	   - 20211021090059143.
 // + 5 digit seed  - 32643
-// The seed is incremented after each call to newid().
+// if state is maintained the seed is incremented after each call to newid() to ensure a unique id is generated.
+// If state is not maintained the `new` datetime will ensure a unique id is generated.
 func Newid() string {
-	id := SeedRoot + DT_yyyyMMddhhmmSSsss() + "." + GetStringFromInt(IdSeed)
+	id := SeedRoot + dt_yyyyMMddhhmmSSsss() + "." + GetStringFromInt(IdSeed)
 	IdSeed = IdSeed + 1
 	return id
 }
 
-// Tuk_Time returns current time for location Europe/London
+// Tuk_Pretty_Time returns a pretty version of the current time for location Europe/London (strips everything after the `.` in Tuk_Time)
+func TUK_Pretty_Time() string {
+	return PrettyTime(Tuk_Time())
+}
+
+// Tuk_Time returns the current time for location Europe/London.
 func Tuk_Time() string {
 	location, err := time.LoadLocation("Europe/London")
 	if err != nil {
@@ -63,58 +102,70 @@ func Tuk_Time() string {
 	}
 	return time.Now().In(location).String()
 }
-func GetMilliseconds() int {
-	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, 3))
-}
+
+// PrettyTime strips everything after the `.` from the input time string
 func PrettyTime(time string) string {
 	return strings.Split(time, ".")[0]
 }
+
+// TUK_Hour returns the current hour as a 2 digit string
 func Tuk_Hour() string {
 	return fmt.Sprintf("%02d",
 		time.Now().Local().Hour())
 }
+
+// TUK_Min returns the current minute as a 2 digit string
 func Tuk_Min() string {
 	return fmt.Sprintf("%02d", time.Now().Local().Minute())
 }
+
+// TUK_Sec returns the current second as a 2 digit string
 func Tuk_Sec() string {
 	return fmt.Sprintf("%02d",
 		time.Now().Local().Second())
 }
+
+// TUK_MilliSec returns the current milliseconds as a 3 digit int
 func Tuk_MilliSec() int {
-	return GetMilliseconds()
+	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, 3))
 }
+
+// TUK_Day returns the current day as a 2 digit string
 func Tuk_Day() string {
 	return fmt.Sprintf("%02d",
 		time.Now().Local().Day())
 }
+
+// TUK_Year returns the current year as a 4 digit string
 func Tuk_Year() string {
 	return fmt.Sprintf("%d",
 		time.Now().Local().Year())
 }
+
+// TUK_Month returns the current month as a 2 digit string
 func Tuk_Month() string {
 	return fmt.Sprintf("%02d",
 		time.Now().Local().Month())
 }
+
+// NewUuid returns a random UUID as a string
 func NewUuid() string {
 	u := uuid.New()
 	return u.String()
 }
-func GetIdIncrementSeed(len int) int {
-	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, len))
-}
-func DT_yyyyMMddhhmmSSsss() string {
-	return Tuk_Year() + Tuk_Month() + Tuk_Day() + Tuk_Hour() + Tuk_Min() + Tuk_Sec() + strconv.Itoa(Tuk_MilliSec())
-}
+
+// GetStringFromInt takes a int input and returns a string of that value.
 func GetStringFromInt(i int) string {
 	return strconv.Itoa(i)
 }
-func GetIntFromString(s string) int {
-	i, e := strconv.Atoi(s)
-	if e != nil {
-		log.Println(e.Error())
-	}
+
+// GetIntFromString takes a string input with an integer value and returns an int of that value. If the input is not numeric, 0 is returned
+func GetIntFromString(input string) int {
+	i, _ := strconv.Atoi(input)
 	return i
 }
+
+// Substr takes a string input and returns the rune (Substring) defined by the start and length in th start and length input values
 func Substr(input string, start int, length int) string {
 	asRunes := []rune(input)
 	if start >= len(asRunes) {
@@ -125,6 +176,8 @@ func Substr(input string, start int, length int) string {
 	}
 	return string(asRunes[start : start+length])
 }
+
+// GetXMLNodeList takes an xml message as input and returns the xml node list as a string for the node input value provide
 func GetXMLNodeList(message string, node string) string {
 	if strings.Contains(message, node) {
 		var nodeopen = "<" + node
@@ -138,4 +191,10 @@ func GetXMLNodeList(message string, node string) string {
 	}
 	log.Println("Message does not contain Element : " + node)
 	return ""
+}
+func getIdIncrementSeed(len int) int {
+	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, len))
+}
+func dt_yyyyMMddhhmmSSsss() string {
+	return Tuk_Year() + Tuk_Month() + Tuk_Day() + Tuk_Hour() + Tuk_Min() + Tuk_Sec() + strconv.Itoa(Tuk_MilliSec())
 }

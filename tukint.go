@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -358,30 +358,28 @@ type Subscriptions struct {
 	Subscriptions []Subscription `json:"Subscriptions"`
 }
 type Event struct {
-	EventId             int64               `json:"eventid"`
-	Creationtime        string              `json:"creationtime"`
-	DocName             string              `json:"docname"`
-	ClassCode           string              `json:"classcode"`
-	ConfCode            string              `json:"confcode"`
-	FormatCode          string              `json:"formatcode"`
-	FacilityCode        string              `json:"facilitycode"`
-	PracticeCode        string              `json:"practicecode"`
-	Expression          string              `json:"expression"`
-	Authors             string              `json:"authors"`
-	XdsPid              string              `json:"xdspid"`
-	XdsDocEntryUid      string              `json:"xdsdocentryuid"`
-	RepositoryUniqueId  string              `json:"repositoryuniqueid"`
-	NhsId               string              `json:"nhsid"`
-	User                string              `json:"user"`
-	Org                 string              `json:"org"`
-	Role                string              `json:"role"`
-	Topic               string              `json:"topic"`
-	Pathway             string              `json:"pathway"`
-	Notes               string              `json:"notes"`
-	Version             string              `json:"ver"`
-	BrokerRef           string              `json:"brokerref"`
-	XDWWorkflowDocument XDWWorkflowDocument `json:"xdwworkflowdocument"`
-	Events              Events              `json:"events"`
+	EventId            int64  `json:"eventid"`
+	Creationtime       string `json:"creationtime"`
+	DocName            string `json:"docname"`
+	ClassCode          string `json:"classcode"`
+	ConfCode           string `json:"confcode"`
+	FormatCode         string `json:"formatcode"`
+	FacilityCode       string `json:"facilitycode"`
+	PracticeCode       string `json:"practicecode"`
+	Expression         string `json:"expression"`
+	Authors            string `json:"authors"`
+	XdsPid             string `json:"xdspid"`
+	XdsDocEntryUid     string `json:"xdsdocentryuid"`
+	RepositoryUniqueId string `json:"repositoryuniqueid"`
+	NhsId              string `json:"nhsid"`
+	User               string `json:"user"`
+	Org                string `json:"org"`
+	Role               string `json:"role"`
+	Topic              string `json:"topic"`
+	Pathway            string `json:"pathway"`
+	Notes              string `json:"notes"`
+	Version            string `json:"ver"`
+	BrokerRef          string `json:"brokerref"`
 }
 type Events struct {
 	Action       string  `json:"action"`
@@ -566,20 +564,35 @@ type EventMessage struct {
 	Source  string
 	Message string
 }
+type TukHttpServer struct {
+	BaseFolder      string
+	ConfigFolder    string
+	TemplateFolder  string
+	LogFolder       string
+	LogToFile       bool
+	CodeSystemFile  string
+	BaseResourceUrl string
+	Port            string
+}
 
 var (
-	BaseFolder              = ""
-	LogFolder               = BaseFolder + "/logs/"
-	ConfigFolder            = BaseFolder + "/configs/"
-	CodeSystemFile          = "codesystem.json"
-	TUK_DB_URL              = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
-	DSUB_BROKER_URL         = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
-	PIX_MANAGER_URL         = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
-	REGIONAL_OID            = "2.16.840.1.113883.2.1.3.31.2.1.1"
-	NHS_OID                 = "2.16.840.1.113883.2.1.4.1"
-	DSUB_ACK_TEMPLATE       = "<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'><SOAP-ENV:Body/></SOAP-ENV:Envelope>"
-	DSUB_SUBSCRIBE_TEMPLATE = "{{define \"subscribe\"}}<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:wsa='http://www.w3.org/2005/08/addressing'><SOAP-ENV:Header><wsa:Action SOAP-ENV:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/NotificationProducer/SubscribeRequest</wsa:Action><wsa:MessageID>urn:uuid:{{newuuid}}</wsa:MessageID><wsa:ReplyTo SOAP-ENV:mustUnderstand='true'><wsa:Address>http://www.w3.org/2005/08/addressing/anonymous</wsa:Address></wsa:ReplyTo><wsa:To>{{.BrokerUrl}}</wsa:To></SOAP-ENV:Header><SOAP-ENV:Body><wsnt:Subscribe xmlns:wsnt='http://docs.oasis-open.org/wsn/b-2' xmlns:a='http://www.w3.org/2005/08/addressing' xmlns:rim='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:wsa='http://www.w3.org/2005/08/addressing'><wsnt:ConsumerReference><wsa:Address>{{.ConsumerUrl}}</wsa:Address></wsnt:ConsumerReference><wsnt:Filter><wsnt:TopicExpression Dialect='http://docs.oasis-open.org/wsn/t-1/TopicExpression/Simple'>ihe:FullDocumentEntry</wsnt:TopicExpression><rim:AdhocQuery id='urn:uuid:742790e0-aba6-43d6-9f1f-e43ed9790b79'><rim:Slot name='{{.Topic}}'><rim:ValueList><rim:Value>('{{.Expression}}')</rim:Value></rim:ValueList></rim:Slot></rim:AdhocQuery></wsnt:Filter></wsnt:Subscribe></SOAP-ENV:Body></SOAP-ENV:Envelope>{{end}}"
-	DSUB_CANCEL_TEMPLATE    = "{{define \"cancel\"}}<soap:Envelope xmlns:soap='http://www.w3.org/2003/05/soap-envelope'><soap:Header><Action xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeRequest</Action><MessageID xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>urn:uuid:{{.UUID}}</MessageID><To xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>{{.BrokerRef}}</To><ReplyTo xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'><Address>http://www.w3.org/2005/08/addressing/anonymous</Address></ReplyTo></soap:Header><soap:Body><Unsubscribe xmlns='http://docs.oasis-open.org/wsn/b-2' xmlns:ns2='http://www.w3.org/2005/08/addressing' xmlns:ns3='http://docs.oasis-open.org/wsrf/bf-2' xmlns:ns4='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:ns5='urn:oasis:names:tc:ebxml-regrep:xsd:rs:3.0' xmlns:ns6='urn:oasis:names:tc:ebxml-regrep:xsd:lcm:3.0' xmlns:ns7='http://docs.oasis-open.org/wsn/t-1' xmlns:ns8='http://docs.oasis-open.org/wsrf/r-2'/></soap:Body></soap:Envelope>{{end}}"
+	htmlTemplates                      *template.Template
+	xmlTemplates                       *template.Template
+	logFile                            *os.File
+	base_Folder                        = ""
+	log_Folder                         = base_Folder + "/logs"
+	config_Folder                      = base_Folder + "/configs"
+	templates_Folder                   = config_Folder + "/templates"
+	codeSystem_File                    = config_Folder + "/codesystem.json"
+	TUK_DB_URL                         = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
+	DSUB_BROKER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
+	PIX_MANAGER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
+	REGIONAL_OID                       = "2.16.840.1.113883.2.1.3.31.2.1.1"
+	NHS_OID                            = "2.16.840.1.113883.2.1.4.1"
+	DSUB_ACK_TEMPLATE                  = "<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'><SOAP-ENV:Body/></SOAP-ENV:Envelope>"
+	DSUB_SUBSCRIBE_TEMPLATE            = "{{define \"subscribe\"}}<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:wsa='http://www.w3.org/2005/08/addressing'><SOAP-ENV:Header><wsa:Action SOAP-ENV:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/NotificationProducer/SubscribeRequest</wsa:Action><wsa:MessageID>urn:uuid:{{newuuid}}</wsa:MessageID><wsa:ReplyTo SOAP-ENV:mustUnderstand='true'><wsa:Address>http://www.w3.org/2005/08/addressing/anonymous</wsa:Address></wsa:ReplyTo><wsa:To>{{.BrokerUrl}}</wsa:To></SOAP-ENV:Header><SOAP-ENV:Body><wsnt:Subscribe xmlns:wsnt='http://docs.oasis-open.org/wsn/b-2' xmlns:a='http://www.w3.org/2005/08/addressing' xmlns:rim='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:wsa='http://www.w3.org/2005/08/addressing'><wsnt:ConsumerReference><wsa:Address>{{.ConsumerUrl}}</wsa:Address></wsnt:ConsumerReference><wsnt:Filter><wsnt:TopicExpression Dialect='http://docs.oasis-open.org/wsn/t-1/TopicExpression/Simple'>ihe:FullDocumentEntry</wsnt:TopicExpression><rim:AdhocQuery id='urn:uuid:742790e0-aba6-43d6-9f1f-e43ed9790b79'><rim:Slot name='{{.Topic}}'><rim:ValueList><rim:Value>('{{.Expression}}')</rim:Value></rim:ValueList></rim:Slot></rim:AdhocQuery></wsnt:Filter></wsnt:Subscribe></SOAP-ENV:Body></SOAP-ENV:Envelope>{{end}}"
+	DSUB_CANCEL_TEMPLATE               = "{{define \"cancel\"}}<soap:Envelope xmlns:soap='http://www.w3.org/2003/05/soap-envelope'><soap:Header><Action xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeRequest</Action><MessageID xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>urn:uuid:{{.UUID}}</MessageID><To xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>{{.BrokerRef}}</To><ReplyTo xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'><Address>http://www.w3.org/2005/08/addressing/anonymous</Address></ReplyTo></soap:Header><soap:Body><Unsubscribe xmlns='http://docs.oasis-open.org/wsn/b-2' xmlns:ns2='http://www.w3.org/2005/08/addressing' xmlns:ns3='http://docs.oasis-open.org/wsrf/bf-2' xmlns:ns4='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:ns5='urn:oasis:names:tc:ebxml-regrep:xsd:rs:3.0' xmlns:ns6='urn:oasis:names:tc:ebxml-regrep:xsd:lcm:3.0' xmlns:ns7='http://docs.oasis-open.org/wsn/t-1' xmlns:ns8='http://docs.oasis-open.org/wsrf/r-2'/></soap:Body></soap:Envelope>{{end}}"
+	SOAP_XML_Content_Type_EventHeaders = map[string]string{cnst.CONTENT_TYPE: cnst.SOAP_XML}
 )
 
 func Set_AWS_Env_Vars(dburl string, brokerurl string, pixurl string, nhsoid string, regoid string) {
@@ -604,26 +617,62 @@ func SetNHSOID(nhsoid string) {
 func SetRegionalOID(regionaloid string) {
 	REGIONAL_OID = regionaloid
 }
-func SetBaseFolder(baseFolder string) {
-	BaseFolder = baseFolder
+func SetBaseFolder(basePath string) {
+	base_Folder = basePath
 }
 func SetLogFolder(logFolder string) {
-	LogFolder = BaseFolder + "/" + logFolder + "/"
+	log_Folder = base_Folder + "/" + logFolder + "/"
 }
 func SetConfigFolder(configFolder string) {
-	ConfigFolder = BaseFolder + "/" + configFolder + "/"
+	config_Folder = base_Folder + "/" + configFolder + "/"
 }
-func SetCodeSystemFile(csfile string) {
-	CodeSystemFile = csfile
-	if BaseFolder != "" {
-		InitCodeSystem()
+func SetCodeSystemFile(codeSystemFile string) {
+	codeSystem_File = base_Folder + "/" + config_Folder + "/" + codeSystemFile
+	if base_Folder != "" {
+		util.InitCodeSystem(codeSystem_File)
 	}
 }
 func InitLog() {
-
+	var err error
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	mdir := log_Folder
+	if _, err := os.Stat(mdir); errors.Is(err, fs.ErrNotExist) {
+		if e2 := os.Mkdir(mdir, 0700); e2 != nil {
+			log.Println(err.Error())
+			return
+		}
+	}
+	dir := mdir + "/" + util.Tuk_Year()
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+		if e2 := os.Mkdir(dir, 0700); e2 != nil {
+			log.Println(err.Error())
+			return
+		}
+	}
+	logFile, err = os.OpenFile(dir+"/"+util.Tuk_Month()+util.Tuk_Day()+".log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+	log.Println("Using log file - " + logFile.Name())
+	log.SetOutput(logFile)
+	log.Println("-----------------------------------------------------------------------------------")
 }
-func InitCodeSystem() {
-	util.InitCodeSystem(BaseFolder, ConfigFolder, CodeSystemFile)
+func CloseLog() {
+	logFile.Close()
+}
+func LoadTemplates() error {
+	var err error
+	htmlTemplates, err = template.New(cnst.HTML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "/*.html")
+	if err != nil {
+		return err
+	}
+	xmlTemplates, err = template.New(cnst.XML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "/*.xml")
+	if err != nil {
+		return err
+	}
+	log.Printf("Initialised %v HTML and %v XML templates", len(htmlTemplates.Templates()), len(xmlTemplates.Templates()))
+	return nil
 }
 func initLambdaVars() {
 	if os.Getenv("TUK_DB_URL") != "" {
@@ -657,26 +706,29 @@ func initLambdaVars() {
 		log.Println("AWS NHS_OID environment variable is empty")
 	}
 }
-func SOAP_XML_Content_Type_EventHeaders() map[string]string {
-	return map[string]string{cnst.CONTENT_TYPE: cnst.SOAP_XML}
-}
-func NewHTTPServer(resourceURL string, port string) {
-	if resourceURL == "" {
-		resourceURL = "/eventservice"
+func (i *TukHttpServer) NewHTTPServer() {
+	if i.BaseFolder == "" {
+		log.Println("Invalid use of NewHTTPServer(), BaseFolder must be provded!")
+		return
 	}
-	if port == "" {
-		port = ":80"
+	SetBaseFolder(i.BaseFolder)
+	if i.BaseResourceUrl == "" {
+		i.BaseResourceUrl = "/eventservice"
+	}
+	if i.Port == "" {
+		i.Port = ":80"
 	} else {
-		if !strings.HasPrefix(port, ":") {
-			port = ":" + port
+		if !strings.HasPrefix(i.Port, ":") {
+			i.Port = ":" + i.Port
 		}
 	}
 	hn, _ := os.Hostname()
-	http.HandleFunc(resourceURL, writeResponseHeaders(route_TUK_Server_Request))
-	log.Printf("Initialised HTTP Server - Listening on http://%s/%s%s", hn, resourceURL, port)
+	http.HandleFunc(i.BaseResourceUrl, writeResponseHeaders(route_TUK_Server_Request))
+	log.Printf("Initialised HTTP Server - Listening on http://%s/%s%s", hn, i.BaseResourceUrl, i.Port)
 	monitorApp()
-	log.Fatal(http.ListenAndServe(port, nil))
+	log.Fatal(http.ListenAndServe(i.Port, nil))
 }
+
 func monitorApp() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
@@ -780,7 +832,7 @@ func (i *ClientRequest) NewTaskRequest() string {
 	wf := Workflow{XDW_Key: i.XDWKey, Version: i.Version}
 
 	wfs.Workflows = append(wfs.Workflows, wf)
-	if err := wfs.NewEvent(); err != nil {
+	if err := wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return err.Error()
 	}
@@ -797,7 +849,7 @@ func (i *ClientRequest) NewTaskRequest() string {
 	}
 	it := itmplt{TaskId: util.GetStringFromInt(i.ID), XDW: xdw}
 	var b bytes.Buffer
-	err := HtmlTemplates.ExecuteTemplate(&b, "snip_workflow_task", it)
+	err := htmlTemplates.ExecuteTemplate(&b, "snip_workflow_task", it)
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -809,7 +861,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	wf := Workflow{}
 
 	wfs.Workflows = append(wfs.Workflows, wf)
-	if err := wfs.NewEvent(); err != nil {
+	if err := wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return err.Error()
 	}
@@ -817,7 +869,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	for _, wf := range wfs.Workflows {
 
 		if wf.Id > 0 {
-			xdw, err := newXDWWorkflowDocument(wf)
+			xdw, err := initXDWDocStruc(wf)
 			if err != nil {
 				continue
 			}
@@ -825,7 +877,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 			if i.Status != "" {
 				log.Printf("Obtaining Workflows with status = %s", i.Status)
 				if strings.EqualFold(xdw.WorkflowStatus, i.Status) {
-					tmpltworkflow.Created = xdw.EffectiveTime.Value
+					tmpltworkflow.Created = wf.Created
 					tmpltworkflow.Published = wf.Published
 					tmpltworkflow.Version = wf.Version
 					tmpltworkflow.XDWKey = wf.XDW_Key
@@ -849,12 +901,18 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 		}
 	}
 	var b bytes.Buffer
-	err := HtmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOWS, tmpltwfs)
+	err := htmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOWS, tmpltwfs)
 	if err != nil {
 		log.Println(err.Error())
 	}
 	log.Printf("Returning %v Workflows", tmpltwfs.Count)
 	return b.String()
+}
+func initXDWDocStruc(wf Workflow) (XDWWorkflowDocument, error) {
+	var err error
+	xdwStruc := XDWWorkflowDocument{}
+	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwStruc)
+	return xdwStruc, err
 }
 func (i *ClientRequest) NewWorkflowRequest() string {
 	if i.XDWKey == "" && (i.Pathway == "" && i.NHS == "") {
@@ -868,14 +926,14 @@ func (i *ClientRequest) NewWorkflowRequest() string {
 	wf := Workflow{XDW_Key: i.XDWKey, Version: i.Version}
 
 	wfs.Workflows = append(wfs.Workflows, wf)
-	wfs.NewEvent()
+	wfs.NewTukDBEvent()
 
 	if wfs.Count != 1 {
 		return "No Workflow Found with XDW Key - " + i.XDWKey
 	}
 	json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &xdw)
 	var b bytes.Buffer
-	err := HtmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOW, xdw)
+	err := htmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOW, xdw)
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -886,13 +944,13 @@ func (i *ClientRequest) NewDashboardRequest() string {
 	dashboard := Dashboard{}
 	wfs := Workflows{Action: cnst.SELECT}
 	wfs.Workflows = append(wfs.Workflows, Workflow{})
-	wfs.NewEvent()
+	wfs.NewTukDBEvent()
 	log.Printf("Processing %v workflows", wfs.Count)
 	for _, wf := range wfs.Workflows {
 		if wf.Id != 0 {
 			log.Println("Processing " + wf.XDW_Key + " Workflow")
 			dashboard.Total = dashboard.Total + 1
-			xdw, err := newXDWWorkflowDocument(wf)
+			xdw, err := initXDWDocStruc(wf)
 			if err != nil {
 				continue
 			}
@@ -911,102 +969,68 @@ func (i *ClientRequest) NewDashboardRequest() string {
 	}
 
 	var b bytes.Buffer
-	err := HtmlTemplates.ExecuteTemplate(&b, "dashboardwidget", dashboard)
+	err := htmlTemplates.ExecuteTemplate(&b, "dashboardwidget", dashboard)
 	if err != nil {
 		log.Println(err.Error())
 	}
 	return b.String()
 }
 func (i *EventMessage) NewDSUBBrokerEvent() error {
+	var err error
+	var dsubNotify DSUBNotifyMessage
 	initLambdaVars()
-	log.Printf("Received DSUB Broker Event Message\n%s", i.Message)
-	dsubNotify, err := i.initDSUBNotifyMessage()
-	if err != nil {
-		return err
-	}
-	slots := dsubNotify.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject
-	tukevent := Event{
-		EventId:             0,
-		Creationtime:        util.Tuk_Time(),
-		DocName:             slots.Name.LocalizedString.Value,
-		ClassCode:           cnst.NO_VALUE,
-		ConfCode:            cnst.NO_VALUE,
-		FormatCode:          cnst.NO_VALUE,
-		FacilityCode:        cnst.NO_VALUE,
-		PracticeCode:        cnst.NO_VALUE,
-		Expression:          cnst.NO_VALUE,
-		Authors:             cnst.NO_VALUE,
-		XdsPid:              cnst.NO_VALUE,
-		XdsDocEntryUid:      cnst.NO_VALUE,
-		RepositoryUniqueId:  cnst.NO_VALUE,
-		NhsId:               cnst.NO_VALUE,
-		User:                cnst.NO_VALUE,
-		Org:                 cnst.NO_VALUE,
-		Role:                cnst.NO_VALUE,
-		Topic:               cnst.NO_VALUE,
-		Pathway:             cnst.NO_VALUE,
-		Notes:               "None",
-		Version:             "0",
-		BrokerRef:           dsubNotify.NotificationMessage.SubscriptionReference.Address.Text,
-		XDWWorkflowDocument: XDWWorkflowDocument{},
-	}
-	if tukevent.BrokerRef == "" {
-		return errors.New("no subscription ref found in notification message")
-	}
-	log.Printf("Found Subscription Reference %s. Setting Event state from Notify Message", tukevent.BrokerRef)
-	tukevent.initTUKEvent(dsubNotify)
+	log.Printf("Processing DSUB Broker Event Message\n%s", i.Message)
+	if dsubNotify, err = i.newDSUBNotifyMessage(); err == nil {
+		dsubEvent := Event{}
+		dsubEvent.initDSUBEvent(dsubNotify)
+		if dsubEvent.BrokerRef == "" {
+			return errors.New("no subscription ref found in notification message")
+		}
+		log.Printf("Found Subscription Reference %s. Setting Event state from Notify Message", dsubEvent.BrokerRef)
+		if dsubEvent.XdsPid == "" {
+			return errors.New("no xds pid found in notification message")
+		}
+		log.Printf("Checking for TUK Event subscriptions with Broker Ref = %s", dsubEvent.BrokerRef)
+		tukdbSubs := Subscriptions{Action: "select"}
+		tukSub := Subscription{BrokerRef: dsubEvent.BrokerRef}
+		tukdbSubs.Subscriptions = append(tukdbSubs.Subscriptions, tukSub)
+		if err = tukdbSubs.NewTukDBEvent(); err == nil {
+			log.Printf("TUK Event Subscriptions Count : %v", tukdbSubs.Count)
+			if tukdbSubs.Count > 0 {
+				log.Printf("Found %s %s Subsription for Broker Ref %s", tukdbSubs.Subscriptions[1].Pathway, tukdbSubs.Subscriptions[1].Expression, tukdbSubs.Subscriptions[1].BrokerRef)
+				dsubEvent.Pathway = tukdbSubs.Subscriptions[1].Pathway
+				dsubEvent.Topic = tukdbSubs.Subscriptions[1].Topic
+				log.Println("Registering DSUB Notification with Event Service")
 
-	log.Printf("Checking for event subscriptions with Broker Ref %s", tukevent.BrokerRef)
-	subs := Subscriptions{Action: "select"}
-	sub := Subscription{BrokerRef: tukevent.BrokerRef}
-	subs.Subscriptions = append(subs.Subscriptions, sub)
-	if err := subs.NewEvent(); err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	log.Printf("Event Subscriptions Count : %v", subs.Count)
-	if subs.Count > 0 {
-		log.Printf("Found %s %s Subsription for Broker Ref %s", subs.Subscriptions[1].Pathway, subs.Subscriptions[1].Expression, tukevent.BrokerRef)
-		tukevent.Pathway = subs.Subscriptions[1].Pathway
-		tukevent.Topic = subs.Subscriptions[1].Topic
-		log.Println("Registering DSUB Notification with Event Service")
-
-		log.Printf("Obtaining NHS ID. Using %s", tukevent.XdsPid+":"+REGIONAL_OID)
-		pixmQuery := PIXmQuery{PID: tukevent.XdsPid, PIDOID: REGIONAL_OID}
-		if err := pixmQuery.InitPIXPatient(); err != nil {
-			log.Println(err.Error())
-			return err
-		}
-		if pixmQuery.Count != 1 {
-			return errors.New("no unique patient returned")
-		}
-		evs := Events{
-			Action: "insert",
-		}
-		tukevent.NhsId = pixmQuery.Response[0].NHSID
-		if len(tukevent.NhsId) == 10 {
-			log.Printf("Obtained NHS ID %s", tukevent.NhsId)
-			evs.Events = append(evs.Events, tukevent)
-			if err := evs.NewEvent(); err != nil {
-				log.Println(err.Error())
+				log.Printf("Obtaining NHS ID. Using %s", dsubEvent.XdsPid+":"+REGIONAL_OID)
+				pixmQuery := PIXmQuery{PID: dsubEvent.XdsPid, PIDOID: REGIONAL_OID}
+				if err = pixmQuery.InitPIXPatient(); err == nil {
+					if pixmQuery.Count != 1 {
+						return errors.New("no unique patient returned")
+					}
+					evs := Events{Action: "insert"}
+					dsubEvent.NhsId = pixmQuery.Response[0].NHSID
+					if len(dsubEvent.NhsId) == 10 {
+						log.Printf("Obtained NHS ID %s", dsubEvent.NhsId)
+						evs.Events = append(evs.Events, dsubEvent)
+						if err = evs.NewTukDBEvent(); err == nil {
+							log.Printf("Created TUK Event from DSUB Notification of the Publication of Document Type %s - Broker Ref - %s", dsubEvent.Expression, dsubEvent.BrokerRef)
+							dsubEvent.updateWorkflow(pixmQuery.Response[0])
+						}
+					} else {
+						return errors.New("unable to obtain valid nhs id")
+					}
+				}
 			} else {
-				log.Printf("Persisted Event ID %v", evs.LastInsertId)
+				log.Printf("No Subscription found with brokerref = %s. Sending Cancel request to Broker", dsubEvent.BrokerRef)
+				dsubCancel := DSUBCancel{BrokerRef: dsubEvent.BrokerRef, UUID: util.NewUuid()}
+				dsubCancel.NewEvent()
 			}
-			log.Printf("Created TUK Event from DSUB Notification of the Publication of Document Type %s - Broker Ref - %s", tukevent.Expression, tukevent.BrokerRef)
-			tukevent.EventId = evs.LastInsertId
-			tukevent.updateWorkflow(pixmQuery.Response[0])
-		} else {
-			return errors.New("unable to obtain nhs id")
 		}
-	} else {
-		log.Printf("No Subscription found with brokerref = %s. Sending Cancel request to Broker", tukevent.BrokerRef)
-		cancel := DSUBCancel{BrokerRef: tukevent.BrokerRef, UUID: util.NewUuid()}
-		cancel.NewEvent()
 	}
-
 	return nil
 }
-func (i *EventMessage) initDSUBNotifyMessage() (DSUBNotifyMessage, error) {
+func (i *EventMessage) newDSUBNotifyMessage() (DSUBNotifyMessage, error) {
 	dsubNotify := DSUBNotifyMessage{}
 	if i.Message == "" {
 		return dsubNotify, errors.New("message is empty")
@@ -1029,7 +1053,7 @@ func (i *Event) updateWorkflow(pat PIXPatient) {
 		Name: strings.ToUpper(i.Pathway),
 	}
 	wfdefs.XDW = append(wfdefs.XDW, wfdef)
-	if err := wfdefs.NewEvent(); err != nil {
+	if err := wfdefs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return
 	}
@@ -1051,18 +1075,18 @@ func (i *Event) updateWorkflow(pat PIXPatient) {
 			XDW_Key: strings.ToUpper(i.Pathway) + i.NhsId,
 		}
 		wfdocs.Workflows = append(wfdocs.Workflows, wfdoc)
-		if err := wfdocs.NewEvent(); err != nil {
+		if err := wfdocs.NewTukDBEvent(); err != nil {
 			log.Println(err.Error())
 			return
 		}
 		if wfdocs.Count == 0 {
 			log.Printf("No existing workflow state found for %s %s", strings.ToUpper(i.Pathway), i.NhsId)
-			i.XDWWorkflowDocument = i.createWorkflow(wfdef, pat)
+			workflowDocument := i.createWorkflow(wfdef, pat)
 			log.Println("Creating Workflow state")
 			var wfdocbytes []byte
 			var wfdefbytes []byte
 			var err error
-			if wfdocbytes, err = json.Marshal(i.XDWWorkflowDocument); err != nil {
+			if wfdocbytes, err = json.Marshal(workflowDocument); err != nil {
 				log.Println(err.Error())
 				return
 			}
@@ -1075,25 +1099,26 @@ func (i *Event) updateWorkflow(pat PIXPatient) {
 			wfdocs = Workflows{Action: "insert"}
 			wfdoc = Workflow{
 				XDW_Key:   strings.ToUpper(i.Pathway) + i.NhsId,
-				XDW_UID:   i.XDWWorkflowDocument.ID.Extension,
+				XDW_UID:   workflowDocument.ID.Extension,
 				XDW_Doc:   wfdocstr,
 				XDW_Def:   wfdefstr,
 				Version:   0,
 				Published: false,
 			}
 			wfdocs.Workflows = append(wfdocs.Workflows, wfdoc)
-			if err := wfdocs.NewEvent(); err != nil {
+			if err := wfdocs.NewTukDBEvent(); err != nil {
 				log.Println(err.Error())
 				return
 			}
 			log.Println("Persisted Workflow state")
 		} else {
+			activeWorkflow := XDWWorkflowDocument{}
 			log.Printf("Existing Workflow state found for Pathway %s NHS ID %s", i.Pathway, i.NhsId)
-			if err := json.Unmarshal([]byte(wfdocs.Workflows[1].XDW_Doc), &i.XDWWorkflowDocument); err != nil {
+			if err := json.Unmarshal([]byte(wfdocs.Workflows[1].XDW_Doc), &activeWorkflow); err != nil {
 				log.Println(err.Error())
 			}
 			log.Printf("Updating %s Workflow for NHS ID %s with latest events", i.Pathway, i.NhsId)
-			i.updateActiveWorkflow()
+			//i.updateActiveWorkflow()
 		}
 
 	} else {
@@ -1101,28 +1126,25 @@ func (i *Event) updateWorkflow(pat PIXPatient) {
 
 	}
 }
-func (i *Event) updateActiveWorkflow() error {
-	log.Println("Updating Active Workflow")
 
-	if i.XDWWorkflowDocument.WorkflowStatus != "COMPLETE" {
-		log.Println("Workflow is not complete. Updating Workflow Tasks")
-
-		tukEvents := Events{Action: "select"}
-		tukEvent := Event{Pathway: i.Pathway, NhsId: i.NhsId}
-		tukEvents.Events = append(tukEvents.Events, tukEvent)
-		if err := tukEvents.NewEvent(); err != nil {
-			log.Println(err.Error())
-			return err
-		}
-		i.Events = tukEvents
-		sort.Sort(eventsList(i.Events.Events))
-		log.Printf("Updating %s Workflow Tasks with %v Events", i.XDWWorkflowDocument.WorkflowDefinitionReference, len(i.Events.Events))
-
-		log.Println("Replacing Active Workflow State with Updated Workflow State")
-
-	}
-	return nil
-}
+// func (i *Event) updateActiveWorkflow() error {
+// 	log.Println("Updating Active Workflow")
+// 	if i.XDWWorkflowDocument.WorkflowStatus != "COMPLETE" {
+// 		log.Println("Workflow is not complete. Updating Workflow Tasks")
+// 		tukEvents := Events{Action: "select"}
+// 		tukEvent := Event{Pathway: i.Pathway, NhsId: i.NhsId}
+// 		tukEvents.Events = append(tukEvents.Events, tukEvent)
+// 		if err := tukEvents.NewEvent(); err != nil {
+// 			log.Println(err.Error())
+// 			return err
+// 		}
+// 		i.Events = tukEvents
+// 		sort.Sort(eventsList(i.Events.Events))
+// 		log.Printf("Updating %s Workflow Tasks with %v Events", i.XDWWorkflowDocument.WorkflowDefinitionReference, len(i.Events.Events))
+// 		log.Println("Replacing Active Workflow State with Updated Workflow State")
+// 	}
+// 	return nil
+// }
 
 // func (i *Event) updateWorkflowTasks() error {
 // 	tukEvents := Events{Action: "select"}
@@ -1374,8 +1396,30 @@ func (i *Event) createWorkflow(xdwdef WorkflowDefinition, pat PIXPatient) XDWWor
 	log.Println(string(b))
 	return xdwdoc
 }
-func (i *Event) initTUKEvent(dsubNotify DSUBNotifyMessage) {
+func (i *Event) initDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	var slots = dsubNotify.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject
+	i.Creationtime = util.Tuk_Time()
+	i.DocName = slots.Name.LocalizedString.Value
+	i.ClassCode = cnst.NO_VALUE
+	i.ConfCode = cnst.NO_VALUE
+	i.FormatCode = cnst.NO_VALUE
+	i.FacilityCode = cnst.NO_VALUE
+	i.PracticeCode = cnst.NO_VALUE
+	i.Expression = cnst.NO_VALUE
+	i.Authors = cnst.NO_VALUE
+	i.XdsPid = cnst.NO_VALUE
+	i.XdsDocEntryUid = cnst.NO_VALUE
+	i.RepositoryUniqueId = cnst.NO_VALUE
+	i.NhsId = cnst.NO_VALUE
+	i.User = cnst.NO_VALUE
+	i.Org = cnst.NO_VALUE
+	i.Role = cnst.NO_VALUE
+	i.Topic = cnst.NO_VALUE
+	i.Pathway = cnst.NO_VALUE
+	i.Notes = "None"
+	i.Version = "0"
+	i.BrokerRef = dsubNotify.NotificationMessage.SubscriptionReference.Address.Text
+
 	log.Println("Event Creation Time " + i.Creationtime)
 	log.Println("Set Document Name:" + i.DocName)
 
@@ -1508,7 +1552,7 @@ func (i *Event) initTUKEvent(dsubNotify DSUBNotifyMessage) {
 	}
 	log.Println("Parsed DSUB Notify Message")
 }
-func NewDSUBAcknowledgement() []byte {
+func NewDSUBAckMessage() []byte {
 	return []byte(DSUB_ACK_TEMPLATE)
 }
 func (i *DSUBSubscribe) NewEvent() error {
@@ -1557,21 +1601,9 @@ func (i *DSUBCancel) NewEvent() error {
 	return err
 }
 func (i *DSUBCancel) cancelSubscription() error {
-	req, err := http.NewRequest(http.MethodPost, DSUB_BROKER_URL, strings.NewReader(string(i.Request)))
+	_, err := newSOAPRequest(DSUB_BROKER_URL, cnst.SOAP_ACTION_UNSUBSCRIBE_REQUEST, i.Request)
 	if err != nil {
 		log.Println(err.Error())
-		return err
-	}
-	req.Header.Set(cnst.SOAP_ACTION, cnst.SOAP_ACTION_UNSUBSCRIBE_REQUEST)
-	req.Header.Set(cnst.CONTENT_TYPE, cnst.SOAP_XML)
-	req.Header.Set(cnst.ACCEPT, cnst.ALL)
-	req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000))
-	defer cancel()
-	_, err = http.DefaultClient.Do(req.WithContext(ctx))
-	if err != nil {
-		log.Println(err.Error())
-		return err
 	}
 	return err
 }
@@ -1660,7 +1692,7 @@ func (i *PIXmQuery) InitPIXPatient() error {
 	}
 	return nil
 }
-func (i *XDWS) NewEvent() error {
+func (i *XDWS) NewTukDBEvent() error {
 	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"xdws")
 	body, _ := json.Marshal(i)
 	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "xdws", body)
@@ -1671,7 +1703,7 @@ func (i *XDWS) NewEvent() error {
 	}
 	return err
 }
-func (i *Workflows) NewEvent() error {
+func (i *Workflows) NewTukDBEvent() error {
 	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"workflows")
 	body, _ := json.Marshal(i)
 	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "workflows", body)
@@ -1682,7 +1714,7 @@ func (i *Workflows) NewEvent() error {
 	}
 	return err
 }
-func (i *Subscriptions) NewEvent() error {
+func (i *Subscriptions) NewTukDBEvent() error {
 	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"subscriptions")
 	body, _ := json.Marshal(i)
 	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "subscriptions", body)
@@ -1693,7 +1725,7 @@ func (i *Subscriptions) NewEvent() error {
 	}
 	return err
 }
-func (i *Events) NewEvent() error {
+func (i *Events) NewTukDBEvent() error {
 	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"events")
 	body, _ := json.Marshal(i)
 	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "events", body)
@@ -1704,7 +1736,7 @@ func (i *Events) NewEvent() error {
 	}
 	return err
 }
-func (i *IDMaps) NewEvent() error {
+func (i *IDMaps) NewTukDBEvent() error {
 	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"idmaps")
 	body, _ := json.Marshal(i)
 	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "idmaps", body)
@@ -1764,14 +1796,14 @@ func newSOAPRequest(url string, soapAction string, body []byte) (*http.Response,
 	return resp, err
 }
 
-type eventsList []Event
+// type eventsList []Event
 
-func (e eventsList) Len() int {
-	return len(e)
-}
-func (e eventsList) Less(i, j int) bool {
-	return e[i].EventId > e[j].EventId
-}
-func (e eventsList) Swap(i, j int) {
-	e[i], e[j] = e[j], e[i]
-}
+// func (e eventsList) Len() int {
+// 	return len(e)
+// }
+// func (e eventsList) Less(i, j int) bool {
+// 	return e[i].EventId > e[j].EventId
+// }
+// func (e eventsList) Swap(i, j int) {
+// 	e[i], e[j] = e[j], e[i]
+// }

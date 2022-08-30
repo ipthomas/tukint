@@ -2,5 +2,5 @@ github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
 github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/ipthomas/tukcnst v1.0.0 h1:1jI9uxBIBPgSBEw/FOmWEfZhRJ2eTXSElxu174oB/SQ=
 github.com/ipthomas/tukcnst v1.0.0/go.mod h1:ciOdJbw8hryjilsWjN0vhtF3ZbSfEKUd7wfzU0IZ2X8=
-github.com/ipthomas/tukutil v0.0.0-20220828202315-d2be5ab76313 h1:37EZwS9jVNYRJ4zgyF9AN458+wYaCw4iqBXLl3UIJls=
-github.com/ipthomas/tukutil v0.0.0-20220828202315-d2be5ab76313/go.mod h1:SRe4O0j2q9fnpN1W9d077JmHv4OiOHaXT2D6dUKBdBU=
+github.com/ipthomas/tukutil v0.0.0-20220830120032-26a6fa8b317a h1:anWqHLy289KXCfMMg2aBvmiJGmfMzW2dY4Nz5ZXwpJU=
+github.com/ipthomas/tukutil v0.0.0-20220830120032-26a6fa8b317a/go.mod h1:SRe4O0j2q9fnpN1W9d077JmHv4OiOHaXT2D6dUKBdBU=
