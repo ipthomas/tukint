@@ -192,6 +192,28 @@ func GetXMLNodeList(message string, node string) string {
 	log.Println("Message does not contain Element : " + node)
 	return ""
 }
+
+// PrettyAuthorInstitution takes a string input (XDS Author.Institution format) and returns a string with just the Institution name
+func PrettyAuthorInstitution(institution string) string {
+	if strings.Contains(institution, "^") {
+		return strings.Split(institution, "^")[0] + ","
+	}
+	return institution
+}
+
+// PrettyAuthorPerson takes a string input (XDS Author.Person format) and returns a string with the person last and first names
+func PrettyAuthorPerson(author string) string {
+	if strings.Contains(author, "^") {
+		authorsplit := strings.Split(author, "^")
+		if len(authorsplit) > 2 {
+			return authorsplit[1] + " " + authorsplit[2]
+		}
+		if len(authorsplit) > 1 {
+			return authorsplit[1]
+		}
+	}
+	return author
+}
 func getIdIncrementSeed(len int) int {
 	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, len))
 }
