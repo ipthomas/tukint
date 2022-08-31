@@ -1326,6 +1326,23 @@ func NewPIXmConsumer(pid string, pidoid string) (PIXPatient, error) {
 	}
 	return pat, err
 }
+func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
+	var err error
+	xdwdef := WorkflowDefinition{}
+	xdws := XDWS{}
+	xdw := XDW{Name: workflow}
+	xdws.XDW = append(xdws.XDW, xdw)
+	err = xdws.NewTukDBEvent()
+	if xdws.Count != 1 {
+		err = errors.New("no xdw definition found for workflow")
+	} else {
+		json.Unmarshal([]byte(xdws.XDW[1].XDW), &xdwdef)
+	}
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return xdwdef, err
+}
 func (pat *PIXPatient) Log() {
 	b, _ := json.MarshalIndent(pat, "", "  ")
 	log.Println(string(b))
