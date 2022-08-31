@@ -1318,7 +1318,6 @@ func NewPIXmConsumer(pid string, pidoid string) (PIXPatient, error) {
 			err = errors.New("no unique patient returned")
 		} else {
 			pat = pixmQuery.Response[0]
-			pat.Log()
 		}
 	}
 	if err != nil {
@@ -1342,10 +1341,6 @@ func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
 		log.Println(err.Error())
 	}
 	return xdwdef, err
-}
-func (pat *PIXPatient) Log() {
-	b, _ := json.MarshalIndent(pat, "", "  ")
-	log.Println(string(b))
 }
 func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, authorOID string, xdwdef WorkflowDefinition, pat PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s XDW Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
@@ -1435,8 +1430,6 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 	xdwdoc.WorkflowStatusHistory.DocumentEvent = append(xdwdoc.WorkflowStatusHistory.DocumentEvent, docevent)
 
 	log.Println("Created new " + xdwdoc.WorkflowDefinitionReference + " Workflow for Patient " + pat.NHSID)
-	b, _ := xml.MarshalIndent(xdwdoc, "", "  ")
-	log.Println(string(b))
 	return xdwdoc
 }
 func (i *Event) NewXDWContentCreator(xdwdef WorkflowDefinition, pat PIXPatient) XDWWorkflowDocument {
@@ -1532,9 +1525,19 @@ func (i *Event) NewXDWContentCreator(xdwdef WorkflowDefinition, pat PIXPatient) 
 	xdwdoc.WorkflowStatusHistory.DocumentEvent = append(xdwdoc.WorkflowStatusHistory.DocumentEvent, docevent)
 
 	log.Println("Created new " + xdwdoc.WorkflowDefinitionReference + " Workflow for Patient " + i.NhsId)
-	b, _ := xml.MarshalIndent(xdwdoc, "", "  ")
-	log.Println(string(b))
 	return xdwdoc
+}
+func (i *WorkflowDefinition) Log() {
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
+}
+func (i *XDWWorkflowDocument) Log() {
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
+}
+func (i *PIXPatient) Log() {
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
 }
 func (i *Event) initDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	i.Creationtime = util.Tuk_Time()
