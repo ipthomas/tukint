@@ -1848,7 +1848,9 @@ func (i *DSUBSubscribe) NewEvent() error {
 			i.Request = b.Bytes()
 			var resp *http.Response
 			var rsp []byte
-			if resp, err = newSOAPRequest(i.BrokerUrl, cnst.SOAP_ACTION_SUBSCRIBE_REQUEST, i.Request); err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000)*time.Millisecond)
+			defer cancel()
+			if resp, err = newSOAPRequest(i.BrokerUrl, cnst.SOAP_ACTION_SUBSCRIBE_REQUEST, i.Request, ctx); err == nil {
 				if rsp, err = io.ReadAll(resp.Body); err == nil {
 					subrsp := DSUBSubscribeResponse{}
 					if err = xml.Unmarshal(rsp, &subrsp); err == nil {
@@ -1884,7 +1886,9 @@ func (i *DSUBCancel) NewEvent() error {
 	return err
 }
 func (i *DSUBCancel) cancelSubscription() error {
-	_, err := newSOAPRequest(DSUB_BROKER_URL, cnst.SOAP_ACTION_UNSUBSCRIBE_REQUEST, i.Request)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000)*time.Millisecond)
+	defer cancel()
+	_, err := newSOAPRequest(DSUB_BROKER_URL, cnst.SOAP_ACTION_UNSUBSCRIBE_REQUEST, i.Request, ctx)
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -1901,7 +1905,6 @@ func (i *PIXmQuery) InitPIXPatient() error {
 	defer cancel()
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
-		log.Println(err.Error())
 		return err
 	}
 	b, err := io.ReadAll(resp.Body)
@@ -2063,7 +2066,7 @@ func newTUKDBRequest(httpMethod string, resource string, body []byte) ([]byte, e
 	}
 	return nil, err
 }
-func newSOAPRequest(url string, soapAction string, body []byte) (*http.Response, error) {
+func newSOAPRequest(url string, soapAction string, body []byte, ctx context.Context) (*http.Response, error) {
 	var err error
 	var req *http.Request
 	var resp *http.Response
@@ -2072,8 +2075,6 @@ func newSOAPRequest(url string, soapAction string, body []byte) (*http.Response,
 		req.Header.Set(cnst.CONTENT_TYPE, cnst.SOAP_XML)
 		req.Header.Set(cnst.ACCEPT, cnst.ALL)
 		req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000)*time.Millisecond)
-		defer cancel()
 		resp, err = http.DefaultClient.Do(req.WithContext(ctx))
 	}
 	return resp, err
