@@ -596,6 +596,7 @@ var (
 	codeSystem_File                    = "codesystem.json"
 	TUK_DB_URL                         = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
 	DSUB_BROKER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
+	DSUB_CONSUMER_URL                  = "https://cjrvrddgdh.execute-api.eu-west-1.amazonaws.com/beta/"
 	PIX_MANAGER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
 	REGIONAL_OID                       = "2.16.840.1.113883.2.1.3.31.2.1.1"
 	NHS_OID                            = "2.16.840.1.113883.2.1.4.1"
@@ -617,6 +618,9 @@ func SetTUKDBURL(dburl string) {
 }
 func SetDSUBBrokerURL(brokerurl string) {
 	DSUB_BROKER_URL = brokerurl
+}
+func SetDSUBConsumerURL(consumerurl string) {
+	DSUB_CONSUMER_URL = consumerurl
 }
 func SetPIXURL(pixurl string) {
 	PIX_MANAGER_URL = pixurl
@@ -1504,8 +1508,10 @@ func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Sub
 		log.Printf("Creating Broker Subscription for %s workflow expression %s", pwy, exp)
 
 		dsub := DSUBSubscribe{
-			Topic:      cnst.DSUB_TOPIC_TYPE_CODE,
-			Expression: exp,
+			BrokerUrl:   DSUB_BROKER_URL,
+			ConsumerUrl: DSUB_CONSUMER_URL,
+			Topic:       cnst.DSUB_TOPIC_TYPE_CODE,
+			Expression:  exp,
 		}
 		if err = dsub.NewEvent(); err != nil {
 			return rspSubs, err
@@ -1525,6 +1531,8 @@ func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Sub
 			} else {
 				rspSubs.Subscriptions = append(rspSubs.Subscriptions, tuksub)
 			}
+		} else {
+			log.Printf("Broker Reference %s in response is invalid", dsub.BrokerRef)
 		}
 	}
 	return rspSubs, err
@@ -1852,6 +1860,7 @@ func (i *DSUBSubscribe) NewEvent() error {
 			defer cancel()
 			if resp, err = newSOAPRequest(i.BrokerUrl, cnst.SOAP_ACTION_SUBSCRIBE_REQUEST, i.Request, ctx); err == nil {
 				if rsp, err = io.ReadAll(resp.Body); err == nil {
+					log.Println(string(rsp))
 					subrsp := DSUBSubscribeResponse{}
 					if err = xml.Unmarshal(rsp, &subrsp); err == nil {
 						i.BrokerRef = subrsp.Body.SubscribeResponse.SubscriptionReference.Address
