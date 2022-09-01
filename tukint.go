@@ -1529,6 +1529,8 @@ func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Sub
 			if err = tuksubs.NewTukDBEvent(); err != nil {
 				log.Println(err.Error())
 			} else {
+				tuksub.Id = int(tuksubs.LastInsertId)
+				tuksub.Created = util.Tuk_Time()
 				rspSubs.Subscriptions = append(rspSubs.Subscriptions, tuksub)
 			}
 		} else {
@@ -2010,9 +2012,9 @@ func (i *Workflows) NewTukDBEvent() error {
 	return err
 }
 func (i *Subscriptions) NewTukDBEvent() error {
-	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"subscriptions")
+	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+cnst.SUBSCRIPTIONS)
 	body, _ := json.Marshal(i)
-	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "subscriptions", body)
+	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), cnst.SUBSCRIPTIONS, body)
 	if err == nil {
 		if err := json.Unmarshal(bodyBytes, &i); err != nil {
 			fmt.Println(err.Error())
@@ -2021,9 +2023,9 @@ func (i *Subscriptions) NewTukDBEvent() error {
 	return err
 }
 func (i *Events) NewTukDBEvent() error {
-	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"events")
+	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+cnst.EVENTS)
 	body, _ := json.Marshal(i)
-	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "events", body)
+	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), cnst.EVENTS, body)
 	if err == nil {
 		if err := json.Unmarshal(bodyBytes, &i); err != nil {
 			fmt.Println(err.Error())
@@ -2032,9 +2034,9 @@ func (i *Events) NewTukDBEvent() error {
 	return err
 }
 func (i *IDMaps) NewTukDBEvent() error {
-	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+"idmaps")
+	log.Printf("Sending %s Request to %s", getHttpMethod(i.Action), TUK_DB_URL+cnst.ID_MAPS)
 	body, _ := json.Marshal(i)
-	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), "idmaps", body)
+	bodyBytes, err := newTUKDBRequest(getHttpMethod(i.Action), cnst.ID_MAPS, body)
 	if err == nil {
 		if err := json.Unmarshal(bodyBytes, &i); err != nil {
 			fmt.Println(err.Error())
