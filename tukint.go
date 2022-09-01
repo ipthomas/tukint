@@ -1713,6 +1713,10 @@ func (i *PIXPatient) Log() {
 	b, _ := json.MarshalIndent(i, "", "  ")
 	log.Println(string(b))
 }
+func (i *Subscriptions) Log() {
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
+}
 func (i *Event) initDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	i.Creationtime = util.Tuk_Time()
 	i.DocName = dsubNotify.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject.Name.LocalizedString.Value
