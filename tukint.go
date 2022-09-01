@@ -731,7 +731,7 @@ func (i *TukHttpServer) NewHTTPServer() {
 		log.Println("Invalid use of NewHTTPServer(), BaseFolder must be provded!")
 		return
 	}
-	SetBaseFolder(i.BaseFolder)
+	SetFoldersAndFiles(i.BaseFolder, i.LogFolder, i.ConfigFolder, i.TemplateFolder, i.CodeSystemFile)
 	if i.BaseResourceUrl == "" {
 		i.BaseResourceUrl = "/eventservice"
 	}
