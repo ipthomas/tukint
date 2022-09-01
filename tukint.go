@@ -1448,6 +1448,7 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 // DSUB Broker Subscriptions are then created for the workflow tasks.
 // For each successful broker subcription, a Tuk Event subscription with the broker ref, workflow, topic and expression is created
 // The new xdw definition is then persisted
+// It returns a json string response containing the subscriptions created for the workflow
 func RegisterWorkflows() (Subscriptions, error) {
 	var folderfiles []fs.DirEntry
 	var file fs.DirEntry
