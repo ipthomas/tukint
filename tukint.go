@@ -631,30 +631,30 @@ func SetNHSOID(nhsoid string) {
 func SetRegionalOID(regionaloid string) {
 	REGIONAL_OID = regionaloid
 }
-func setBaseFolder(baseFolder string) {
+func SetBaseFolder(baseFolder string) {
 	base_Folder = baseFolder + "/"
 }
-func setLogFolder(logFolder string) {
+func SetLogFolder(logFolder string) {
 	log_Folder = base_Folder + logFolder + "/"
 }
-func setConfigFolder(configFolder string) {
+func SetConfigFolder(configFolder string) {
 	config_Folder = base_Folder + configFolder + "/"
 }
-func setTemplateFolder(templateFolder string) {
+func SetTemplateFolder(templateFolder string) {
 	templates_Folder = config_Folder + templateFolder + "/"
 }
-func setCodeSystemFile(codeSystemFile string) {
+func SetCodeSystemFile(codeSystemFile string) {
 	codeSystem_File = config_Folder + codeSystemFile + ".json"
 	if base_Folder != "" {
 		util.InitCodeSystem(codeSystem_File)
 	}
 }
 func SetFoldersAndFiles(baseFolder string, logFolder string, configFolder string, templateFolder string, codeSysFile string) {
-	setBaseFolder(baseFolder)
-	setLogFolder(logFolder)
-	setConfigFolder(configFolder)
-	setTemplateFolder(templateFolder)
-	setCodeSystemFile(codeSysFile)
+	SetBaseFolder(baseFolder)
+	SetLogFolder(logFolder)
+	SetConfigFolder(configFolder)
+	SetTemplateFolder(templateFolder)
+	SetCodeSystemFile(codeSysFile)
 }
 func InitLog() {
 	var err error
@@ -698,7 +698,7 @@ func LoadTemplates() error {
 	log.Printf("Initialised %v HTML and %v XML templates", len(htmlTemplates.Templates()), len(xmlTemplates.Templates()))
 	return nil
 }
-func initLambdaVars() {
+func InitLambdaVars() {
 	if os.Getenv("TUK_DB_URL") != "" {
 		TUK_DB_URL = os.Getenv("TUK_DB_URL")
 		log.Printf("Set TUK_DB_URL %s from AWS environment variable", TUK_DB_URL)
@@ -799,7 +799,7 @@ func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
 	if err := req.InitClientRequest(); err == nil {
 		res2B, _ := json.MarshalIndent(req, "", "  ")
 		log.Printf("Client Request\n%+v", string(res2B))
-		rsp.Write([]byte(req.processClientRequest()))
+		rsp.Write([]byte(req.ProcessClientRequest()))
 	}
 }
 func (i *ClientRequest) InitClientRequest() error {
@@ -833,7 +833,7 @@ func (i *ClientRequest) InitClientRequest() error {
 	log.Printf("Client Request\n%+v", string(res2B))
 	return nil
 }
-func (req *ClientRequest) processClientRequest() string {
+func (req *ClientRequest) ProcessClientRequest() string {
 	log.Println("Processing Request")
 	switch req.Act {
 	case "dashboard":
@@ -893,7 +893,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	for _, wf := range wfs.Workflows {
 
 		if wf.Id > 0 {
-			xdw, err := initXDWDocStruc(wf)
+			xdw, err := InitXDWDocStruc(wf)
 			if err != nil {
 				continue
 			}
@@ -932,7 +932,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	log.Printf("Returning %v Workflows", tmpltwfs.Count)
 	return b.String()
 }
-func initXDWDocStruc(wf Workflow) (XDWWorkflowDocument, error) {
+func InitXDWDocStruc(wf Workflow) (XDWWorkflowDocument, error) {
 	var err error
 	xdwStruc := XDWWorkflowDocument{}
 	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwStruc)
@@ -974,7 +974,7 @@ func (i *ClientRequest) NewDashboardRequest() string {
 		if wf.Id != 0 {
 			log.Println("Processing " + wf.XDW_Key + " Workflow")
 			dashboard.Total = dashboard.Total + 1
-			xdw, err := initXDWDocStruc(wf)
+			xdw, err := InitXDWDocStruc(wf)
 			if err != nil {
 				continue
 			}
@@ -1002,11 +1002,11 @@ func (i *ClientRequest) NewDashboardRequest() string {
 func (i *EventMessage) NewDSUBBrokerEvent() error {
 	var err error
 	var dsubNotify DSUBNotifyMessage
-	initLambdaVars()
+	InitLambdaVars()
 	log.Printf("Processing DSUB Broker Event Message\n%s", i.Message)
-	if dsubNotify, err = i.newDSUBNotifyMessage(); err == nil {
+	if dsubNotify, err = i.NewDSUBNotifyMessage(); err == nil {
 		dsubEvent := Event{}
-		dsubEvent.initDSUBEvent(dsubNotify)
+		dsubEvent.InitDSUBEvent(dsubNotify)
 		if dsubEvent.BrokerRef == "" {
 			return errors.New("no subscription ref found in notification message")
 		}
@@ -1036,7 +1036,7 @@ func (i *EventMessage) NewDSUBBrokerEvent() error {
 					evs.Events = append(evs.Events, dsubEvent)
 					if err = evs.NewTukDBEvent(); err == nil {
 						log.Printf("Created TUK Event from DSUB Notification of the Publication of Document Type %s - Broker Ref - %s", dsubEvent.Expression, dsubEvent.BrokerRef)
-						dsubEvent.updateWorkflow(pat)
+						dsubEvent.UpdateWorkflow(pat)
 					}
 				} else {
 					return errors.New("unable to obtain valid nhs id")
@@ -1050,7 +1050,7 @@ func (i *EventMessage) NewDSUBBrokerEvent() error {
 	}
 	return nil
 }
-func (i *EventMessage) newDSUBNotifyMessage() (DSUBNotifyMessage, error) {
+func (i *EventMessage) NewDSUBNotifyMessage() (DSUBNotifyMessage, error) {
 	dsubNotify := DSUBNotifyMessage{}
 	if i.Message == "" {
 		return dsubNotify, errors.New("message is empty")
@@ -1066,7 +1066,7 @@ func (i *EventMessage) newDSUBNotifyMessage() (DSUBNotifyMessage, error) {
 	}
 	return dsubNotify, nil
 }
-func (i *Event) updateWorkflow(pat PIXPatient) {
+func (i *Event) UpdateWorkflow(pat PIXPatient) {
 	log.Printf("Updating Event Service %s Workflow for patient %s %s %s", i.Pathway, pat.GivenName, pat.FamilyName, i.NhsId)
 	wfdefs := XDWS{Action: "select"}
 	wfdef := XDW{
@@ -1461,14 +1461,14 @@ func RegisterXDWDefinitions() (Subscriptions, error) {
 	if folderfiles, err = util.GetFolderFiles(config_Folder); err == nil {
 		for _, file = range folderfiles {
 			if strings.HasSuffix(file.Name(), ".json") && strings.Contains(file.Name(), cnst.XDW_DEFINITION_FILE) {
-				if xdwdef, xdwbytes, err := newWorkflowDefinitionFromFile(file); err == nil {
-					if err = deleteTukWorkflowSubscriptions(xdwdef); err == nil {
-						if err = deleteTukWorkflowDefinition(xdwdef); err == nil {
-							pwExps := getXDWBrokerExpressions(xdwdef)
-							if rspSubs, err = createSubscriptionsFromBrokerExpressions(pwExps); err == nil {
+				if xdwdef, xdwbytes, err := NewWorkflowDefinitionFromFile(file); err == nil {
+					if err = DeleteTukWorkflowSubscriptions(xdwdef); err == nil {
+						if err = DeleteTukWorkflowDefinition(xdwdef); err == nil {
+							pwExps := GetXDWBrokerExpressions(xdwdef)
+							if rspSubs, err = CreateSubscriptionsFromBrokerExpressions(pwExps); err == nil {
 								var xdwdefBytes = make(map[string][]byte)
 								xdwdefBytes[xdwdef.Ref] = xdwbytes
-								persistXDWDefinitions(xdwdefBytes)
+								PersistXDWDefinitions(xdwdefBytes)
 							}
 						}
 					}
@@ -1481,7 +1481,7 @@ func RegisterXDWDefinitions() (Subscriptions, error) {
 	}
 	return rspSubs, err
 }
-func persistXDWDefinitions(xdwdefs map[string][]byte) error {
+func PersistXDWDefinitions(xdwdefs map[string][]byte) error {
 	cnt := 0
 	for ref, def := range xdwdefs {
 		if ref != "" {
@@ -1500,7 +1500,7 @@ func persistXDWDefinitions(xdwdefs map[string][]byte) error {
 	log.Printf("XDW's Persisted - %v", cnt)
 	return nil
 }
-func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Subscriptions, error) {
+func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Subscriptions, error) {
 	log.Printf("Creating %v Broker Subscription", len(brokerExps))
 	var err error
 	var rspSubs = Subscriptions{Action: "insert"}
@@ -1541,7 +1541,7 @@ func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Sub
 	}
 	return rspSubs, err
 }
-func getXDWBrokerExpressions(xdwdef WorkflowDefinition) map[string]string {
+func GetXDWBrokerExpressions(xdwdef WorkflowDefinition) map[string]string {
 	log.Printf("Parsing %s XDW Tasks for potential DSUB Broker Subscriptions", xdwdef.Ref)
 	var brokerExps = make(map[string]string)
 	for _, task := range xdwdef.Tasks {
@@ -1566,7 +1566,7 @@ func getXDWBrokerExpressions(xdwdef WorkflowDefinition) map[string]string {
 	}
 	return brokerExps
 }
-func deleteTukWorkflowDefinition(xdwdef WorkflowDefinition) error {
+func DeleteTukWorkflowDefinition(xdwdef WorkflowDefinition) error {
 	var err error
 	var body []byte
 	activexdws := TUKXDWS{Action: cnst.DELETE}
@@ -1583,7 +1583,7 @@ func deleteTukWorkflowDefinition(xdwdef WorkflowDefinition) error {
 	}
 	return err
 }
-func deleteTukWorkflowSubscriptions(xdwdef WorkflowDefinition) error {
+func DeleteTukWorkflowSubscriptions(xdwdef WorkflowDefinition) error {
 	var err error
 	var body []byte
 	activesubs := Subscriptions{Action: cnst.DELETE}
@@ -1600,7 +1600,7 @@ func deleteTukWorkflowSubscriptions(xdwdef WorkflowDefinition) error {
 	}
 	return err
 }
-func newWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte, error) {
+func NewWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte, error) {
 	var err error
 	var xdwdef = WorkflowDefinition{}
 	var xdwdefBytes []byte
@@ -1728,7 +1728,11 @@ func (i *Subscriptions) Log() {
 	b, _ := json.MarshalIndent(i, "", "  ")
 	log.Println(string(b))
 }
-func (i *Event) initDSUBEvent(dsubNotify DSUBNotifyMessage) {
+func (i *Subscription) Log() {
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
+}
+func (i *Event) InitDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	i.Creationtime = util.Tuk_Time()
 	i.DocName = dsubNotify.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject.Name.LocalizedString.Value
 	i.ClassCode = cnst.NO_VALUE
@@ -1810,7 +1814,7 @@ func (i *Event) initDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	log.Println("Parsed DSUB Notify Message")
 	i.printEventVals()
 }
-func (i *Event) printEventVals() {
+func (i *Event) PrintEventVals() {
 	log.Printf("Set Event Author Person - %s", i.User)
 	log.Printf("Set Event Author Organisation - %s", i.Org)
 	log.Printf("Set Event Author Role:%s", i.Role)
@@ -1898,7 +1902,7 @@ func (i *DSUBCancel) NewEvent() error {
 	}
 	return err
 }
-func (i *DSUBCancel) cancelSubscription() error {
+func (i *DSUBCancel) CancelSubscription() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000)*time.Millisecond)
 	defer cancel()
 	_, err := newSOAPRequest(DSUB_BROKER_URL, cnst.SOAP_ACTION_UNSUBSCRIBE_REQUEST, i.Request, ctx)
