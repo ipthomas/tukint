@@ -656,6 +656,8 @@ func SetFoldersAndFiles(baseFolder string, logFolder string, configFolder string
 	SetTemplateFolder(templateFolder)
 	SetCodeSystemFile(codeSysFile)
 }
+
+// InitLog sends log messages to a log file rather than the console
 func InitLog() {
 	var err error
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
@@ -682,6 +684,8 @@ func InitLog() {
 	log.SetOutput(logFile)
 	log.Println("-----------------------------------------------------------------------------------")
 }
+
+// CloseLog closes logging to the log file
 func CloseLog() {
 	logFile.Close()
 }
@@ -1323,6 +1327,8 @@ func (i *Event) UpdateWorkflow(pat PIXPatient) {
 //			return nextTaskEventId, true
 //		}
 
+// NewPIXmConsumer takes a patient id and oid as string input and creates a PIXm Cosnumer actor to perform a PIXm query against an IHE PIXm compliant server
+// if a unique patient is returned in the query response a PIXPatient struct is returned containing the patient demographics and ID's
 func NewPIXmConsumer(pid string, pidoid string) (PIXPatient, error) {
 	var err error
 	pat := PIXPatient{}
@@ -1339,6 +1345,8 @@ func NewPIXmConsumer(pid string, pidoid string) (PIXPatient, error) {
 	}
 	return pat, err
 }
+
+// New XDWDefinition takes an input string containing the workflow ref. It returns a WorkflowDefinition struc for the requested workflow
 func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
 	var err error
 	xdwdef := WorkflowDefinition{}
