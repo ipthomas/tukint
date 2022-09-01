@@ -1443,13 +1443,13 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 	return xdwdoc
 }
 
-// RegisterWorkflows loads and parses xdw definition files (with suffix `_xdwdef.json“) in the config folder.
+// RegisterXDWDefinitions loads and parses xdw definition files (with suffix `_xdwdef.json“) in the config folder.
 // Any exisitng xdw definition for the workflow is deleted along with any tuk event subscriptions associated with the workflow
 // DSUB Broker Subscriptions are then created for the workflow tasks.
 // For each successful broker subcription, a Tuk Event subscription with the broker ref, workflow, topic and expression is created
 // The new xdw definition is then persisted
 // It returns a json string response containing the subscriptions created for the workflow
-func RegisterWorkflows() (Subscriptions, error) {
+func RegisterXDWDefinitions() (Subscriptions, error) {
 	var folderfiles []fs.DirEntry
 	var file fs.DirEntry
 	var err error
