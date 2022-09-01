@@ -627,20 +627,30 @@ func SetNHSOID(nhsoid string) {
 func SetRegionalOID(regionaloid string) {
 	REGIONAL_OID = regionaloid
 }
-func SetBaseFolder(basePath string) {
-	base_Folder = basePath
+func setBaseFolder(basePath string) {
+	base_Folder = basePath + "/"
 }
-func SetLogFolder(logFolder string) {
-	log_Folder = base_Folder + "/" + logFolder + "/"
+func setLogFolder(logFolder string) {
+	log_Folder = base_Folder + logFolder + "/"
 }
-func SetConfigFolder(configFolder string) {
-	config_Folder = base_Folder + "/" + configFolder + "/"
+func setConfigFolder(configFolder string) {
+	config_Folder = base_Folder + configFolder + "/"
 }
-func SetCodeSystemFile(codeSystemFile string) {
-	codeSystem_File = base_Folder + "/" + config_Folder + "/" + codeSystemFile
+func setTemplateFolder(templateFolder string) {
+	templates_Folder = config_Folder + templateFolder + "/"
+}
+func setCodeSystemFile(codeSystemFile string) {
+	codeSystem_File = config_Folder + codeSystemFile + ".json"
 	if base_Folder != "" {
 		util.InitCodeSystem(codeSystem_File)
 	}
+}
+func SetFoldersAndFiles(baseFolder string, logFolder string, configFolder string, templateFolder string, codeSysFile string) {
+	setBaseFolder(baseFolder)
+	setLogFolder(logFolder)
+	setConfigFolder(configFolder)
+	setTemplateFolder(templateFolder)
+	setCodeSystemFile(codeSysFile)
 }
 func InitLog() {
 	var err error
@@ -1333,7 +1343,7 @@ func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
 	xdws.XDW = append(xdws.XDW, xdw)
 	err = xdws.NewTukDBEvent()
 	if xdws.Count != 1 {
-		err = errors.New("no xdw definition found for workflow")
+		err = errors.New("no xdw definition found for workflow " + workflow)
 	} else {
 		json.Unmarshal([]byte(xdws.XDW[1].XDW), &xdwdef)
 	}
