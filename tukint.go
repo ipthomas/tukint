@@ -1442,6 +1442,163 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 	log.Println("Created new " + xdwdoc.WorkflowDefinitionReference + " Workflow for Patient " + pat.NHSID)
 	return xdwdoc
 }
+func RegisterWorkflows() (Subscriptions, error) {
+	var folderfiles []fs.DirEntry
+	var file fs.DirEntry
+	var err error
+	var rspSubs = Subscriptions{}
+	if folderfiles, err = util.GetFolderFiles(config_Folder); err == nil {
+		for _, file = range folderfiles {
+			if strings.HasSuffix(file.Name(), ".json") && strings.Contains(file.Name(), cnst.XDW_DEFINITION_FILE) {
+				if xdwdef, xdwbytes, err := newWorkflowDefinitionFromFile(file); err == nil {
+					if err = deleteTukWorkflowSubscriptions(xdwdef); err == nil {
+						if err = deleteTukWorkflowDefinition(xdwdef); err == nil {
+							pwExps := getXDWBrokerExpressions(xdwdef)
+							if rspSubs, err = createSubscriptionsFromBrokerExpressions(pwExps); err == nil {
+								var xdwdefBytes = make(map[string][]byte)
+								xdwdefBytes[xdwdef.Ref] = xdwbytes
+								persistXDWDefinitions(xdwdefBytes)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return rspSubs, err
+}
+func persistXDWDefinitions(xdwdefs map[string][]byte) error {
+	cnt := 0
+	for ref, def := range xdwdefs {
+		if ref != "" {
+			log.Println("Persisting XDW Definition for Pathway : " + ref)
+			xdws := XDWS{Action: "insert"}
+			xdw := XDW{Name: ref, IsXDSMeta: false, XDW: string(def)}
+			xdws.XDW = append(xdws.XDW, xdw)
+			if err := xdws.NewTukDBEvent(); err == nil {
+				log.Println("Persisted XDW Definition for Pathway : " + ref)
+				cnt = cnt + 1
+			} else {
+				log.Println("Failed to Persist XDW Definition for Pathway : " + ref)
+			}
+		}
+	}
+	log.Printf("XDW's Persisted - %v", cnt)
+	return nil
+}
+func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Subscriptions, error) {
+	log.Printf("Creating %v Broker Subscription", len(brokerExps))
+	var err error
+	var rspSubs = Subscriptions{Action: "insert"}
+	for exp, pwy := range brokerExps {
+		log.Printf("Creating Broker Subscription for %s workflow expression %s", pwy, exp)
+
+		dsub := DSUBSubscribe{
+			Topic:      cnst.DSUB_TOPIC_TYPE_CODE,
+			Expression: exp,
+		}
+		if err = dsub.NewEvent(); err != nil {
+			log.Println(err.Error())
+			return rspSubs, err
+		}
+		if dsub.BrokerRef != "" {
+			tuksub := Subscription{
+				BrokerRef:  dsub.BrokerRef,
+				Pathway:    pwy,
+				Topic:      cnst.DSUB_TOPIC_TYPE_CODE,
+				Expression: exp,
+			}
+			tuksubs := Subscriptions{Action: cnst.INSERT}
+			tuksubs.Subscriptions = append(tuksubs.Subscriptions, tuksub)
+			log.Println("Registering Subscription Reference with Event Service")
+			if err = tuksubs.NewTukDBEvent(); err != nil {
+				log.Println(err.Error())
+			} else {
+				rspSubs.Subscriptions = append(rspSubs.Subscriptions, tuksub)
+			}
+		}
+	}
+	return rspSubs, err
+}
+func getXDWBrokerExpressions(xdwdef WorkflowDefinition) map[string]string {
+	log.Printf("Parsing %s XDW Tasks for potential DSUB Broker Subscriptions", xdwdef.Ref)
+	var brokerExps = make(map[string]string)
+	for _, task := range xdwdef.Tasks {
+		for _, inp := range task.Input {
+			log.Printf("Checking Input Task %s", inp.Name)
+			if strings.Contains(inp.Name, "^^") {
+				brokerExps[inp.Name] = xdwdef.Ref
+				log.Printf("Task %v %s task input %s included in potential DSUB Broker subscriptions", task.ID, task.Name, inp.Name)
+			} else {
+				log.Printf("Input Task %s does not require a dsub broker subscription", inp.Name)
+			}
+		}
+		for _, out := range task.Output {
+			log.Printf("Checking Output Task %s", out.Name)
+			if strings.Contains(out.Name, "^^") {
+				brokerExps[out.Name] = xdwdef.Ref
+				log.Printf("Task %v %s task output %s included in potential DSUB Broker subscriptions", task.ID, task.Name, out.Name)
+			} else {
+				log.Printf("Output Task %s does not require a dsub broker subscription", out.Name)
+			}
+		}
+	}
+	return brokerExps
+}
+func deleteTukWorkflowDefinition(xdwdef WorkflowDefinition) error {
+	var err error
+	var body []byte
+	activexdws := TUKXDWS{Action: cnst.DELETE}
+	activexdw := TUKXDW{Name: xdwdef.Ref}
+	activexdws.XDW = append(activexdws.XDW, activexdw)
+	if body, err = json.Marshal(activexdws); err == nil {
+		log.Printf("Deleting TUK Workflow Definition for %s workflow", xdwdef.Ref)
+		if _, err = newTUKDBRequest(http.MethodPost, cnst.TUK_DB_TABLE_XDWS, body); err == nil {
+			log.Printf("Deleted TUK Workflow Definition for %s workflow", xdwdef.Ref)
+		}
+	}
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return err
+}
+func deleteTukWorkflowSubscriptions(xdwdef WorkflowDefinition) error {
+	var err error
+	var body []byte
+	activesubs := Subscriptions{Action: cnst.DELETE}
+	activesub := Subscription{Pathway: xdwdef.Ref}
+	activesubs.Subscriptions = append(activesubs.Subscriptions, activesub)
+	if body, err = json.Marshal(activesubs); err == nil {
+		log.Printf("Deleting TUK Event Subscriptions for %s workflow", xdwdef.Ref)
+		if _, err = newTUKDBRequest(http.MethodPost, cnst.TUK_DB_TABLE_SUBSCRIPTIONS, body); err == nil {
+			log.Printf("Deleted TUK Event Subscriptions for %s workflow", xdwdef.Ref)
+		}
+	}
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return err
+}
+func newWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte, error) {
+	var err error
+	var xdwdef = WorkflowDefinition{}
+	var xdwdefBytes []byte
+	var xdwfile *os.File
+	var input = config_Folder + file.Name()
+	if xdwfile, err = os.Open(input); err == nil {
+		json.NewDecoder(xdwfile).Decode(&xdwdef)
+		if xdwdefBytes, err = json.MarshalIndent(xdwdef, "", "  "); err == nil {
+			log.Printf("Loaded WF Def for Pathway %s : Bytes = %v", xdwdef.Ref, len(xdwdefBytes))
+		}
+	}
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return xdwdef, xdwdefBytes, err
+}
 func (i *Event) NewXDWContentCreator(xdwdef WorkflowDefinition, pat PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s Workflow Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
 	xdwdoc := XDWWorkflowDocument{}

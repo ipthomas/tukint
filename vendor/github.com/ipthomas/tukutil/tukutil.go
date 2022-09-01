@@ -3,6 +3,7 @@ package tukutil
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"strconv"
@@ -213,6 +214,24 @@ func PrettyAuthorPerson(author string) string {
 		}
 	}
 	return author
+}
+
+// GetFolderFiles takes a string input of the complete folder path and returns a fs.DirEntry
+func GetFolderFiles(folder string) ([]fs.DirEntry, error) {
+	var err error
+	var f *os.File
+	var fileInfo []fs.DirEntry
+	f, err = os.Open(folder)
+	if err != nil {
+		log.Println(err)
+		return fileInfo, err
+	}
+	fileInfo, err = f.ReadDir(-1)
+	f.Close()
+	if err != nil {
+		log.Println(err)
+	}
+	return fileInfo, err
 }
 func getIdIncrementSeed(len int) int {
 	return GetIntFromString(Substr(GetStringFromInt(time.Now().Nanosecond()), 0, len))
