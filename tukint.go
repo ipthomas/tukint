@@ -1508,7 +1508,6 @@ func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Sub
 			Expression: exp,
 		}
 		if err = dsub.NewEvent(); err != nil {
-			log.Println(err.Error())
 			return rspSubs, err
 		}
 		if dsub.BrokerRef != "" {
@@ -1898,7 +1897,7 @@ func (i *PIXmQuery) InitPIXPatient() error {
 	req.Header.Set(cnst.CONTENT_TYPE, cnst.APPLICATION_JSON)
 	req.Header.Set(cnst.ACCEPT, cnst.ALL)
 	req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(2000)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000)*time.Millisecond)
 	defer cancel()
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
@@ -2073,7 +2072,7 @@ func newSOAPRequest(url string, soapAction string, body []byte) (*http.Response,
 		req.Header.Set(cnst.CONTENT_TYPE, cnst.SOAP_XML)
 		req.Header.Set(cnst.ACCEPT, cnst.ALL)
 		req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000))
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000)*time.Millisecond)
 		defer cancel()
 		resp, err = http.DefaultClient.Do(req.WithContext(ctx))
 	}
