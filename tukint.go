@@ -1532,6 +1532,8 @@ func createSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (Sub
 				tuksub.Id = int(tuksubs.LastInsertId)
 				tuksub.Created = util.Tuk_Time()
 				rspSubs.Subscriptions = append(rspSubs.Subscriptions, tuksub)
+				rspSubs.Count = rspSubs.Count + 1
+				rspSubs.LastInsertId = int64(tuksub.Id)
 			}
 		} else {
 			log.Printf("Broker Reference %s in response is invalid", dsub.BrokerRef)
