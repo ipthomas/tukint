@@ -1838,7 +1838,7 @@ func NewDSUBAckMessage() []byte {
 func (i *DSUBSubscribe) NewEvent() error {
 	var err error
 	var tmplt *template.Template
-	if tmplt, err = template.New(cnst.SUBSCRIBE).Parse(DSUB_SUBSCRIBE_TEMPLATE); err == nil {
+	if tmplt, err = template.New(cnst.SUBSCRIBE).Funcs(util.TemplateFuncMap()).Parse(DSUB_SUBSCRIBE_TEMPLATE); err == nil {
 		var b bytes.Buffer
 		if err = tmplt.Execute(&b, i); err == nil {
 			i.BrokerUrl = DSUB_BROKER_URL
@@ -1862,7 +1862,7 @@ func (i *DSUBSubscribe) NewEvent() error {
 	return err
 }
 func (i *DSUBCancel) NewEvent() error {
-	tmplt, err := template.New(cnst.CANCEL).Parse(DSUB_CANCEL_TEMPLATE)
+	tmplt, err := template.New(cnst.CANCEL).Funcs(util.TemplateFuncMap()).Parse(DSUB_CANCEL_TEMPLATE)
 	if err != nil {
 		log.Println(err.Error())
 		return err
