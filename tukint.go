@@ -590,10 +590,10 @@ var (
 	xmlTemplates                       *template.Template
 	logFile                            *os.File
 	base_Folder                        = ""
-	log_Folder                         = base_Folder + "/logs"
-	config_Folder                      = base_Folder + "/configs"
-	templates_Folder                   = config_Folder + "/templates"
-	codeSystem_File                    = config_Folder + "/codesystem.json"
+	log_Folder                         = ""
+	config_Folder                      = ""
+	templates_Folder                   = ""
+	codeSystem_File                    = "codesystem.json"
 	TUK_DB_URL                         = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
 	DSUB_BROKER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
 	PIX_MANAGER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
@@ -627,8 +627,8 @@ func SetNHSOID(nhsoid string) {
 func SetRegionalOID(regionaloid string) {
 	REGIONAL_OID = regionaloid
 }
-func setBaseFolder(basePath string) {
-	base_Folder = basePath + "/"
+func setBaseFolder(baseFolder string) {
+	base_Folder = baseFolder + "/"
 }
 func setLogFolder(logFolder string) {
 	log_Folder = base_Folder + logFolder + "/"
