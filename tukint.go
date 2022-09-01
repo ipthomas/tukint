@@ -1812,7 +1812,7 @@ func (i *Event) InitDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	i.Role = i.PracticeCode
 	i.setExternalIdentifiers(dsubNotify)
 	log.Println("Parsed DSUB Notify Message")
-	i.printEventVals()
+	i.PrintEventVals()
 }
 func (i *Event) PrintEventVals() {
 	log.Printf("Set Event Author Person - %s", i.User)
@@ -1896,7 +1896,7 @@ func (i *DSUBCancel) NewEvent() error {
 		return err
 	}
 	i.Request = b.Bytes()
-	err = i.cancelSubscription()
+	err = i.CancelSubscription()
 	if err != nil {
 		log.Println(err.Error())
 	}
