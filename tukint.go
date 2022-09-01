@@ -1342,7 +1342,7 @@ func NewPIXmConsumer(pid string, pidoid string) (PIXPatient, error) {
 func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
 	var err error
 	xdwdef := WorkflowDefinition{}
-	xdws := XDWS{}
+	xdws := XDWS{Action: cnst.SELECT}
 	xdw := XDW{Name: workflow}
 	xdws.XDW = append(xdws.XDW, xdw)
 	err = xdws.NewTukDBEvent()
