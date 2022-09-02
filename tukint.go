@@ -780,6 +780,10 @@ func (i *TukHttpServer) NewHTTPServer() {
 			i.Port = ":" + i.Port
 		}
 	}
+	if err := LoadTemplates(); err != nil {
+		log.Println(err.Error())
+		return
+	}
 	hn, _ := os.Hostname()
 	http.HandleFunc(i.BaseResourceUrl, writeResponseHeaders(route_TUK_Server_Request))
 	log.Printf("Initialised HTTP Server - Listening on http://%s%s%s", hn, i.Port, i.BaseResourceUrl)
