@@ -774,7 +774,7 @@ func (i *TukHttpServer) NewHTTPServer() {
 		}
 	}
 	if i.Port == "" {
-		i.Port = ":80"
+		i.Port = ":8080"
 	} else {
 		if !strings.HasPrefix(i.Port, ":") {
 			i.Port = ":" + i.Port
