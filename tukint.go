@@ -1732,7 +1732,7 @@ func (i *WorkflowDefinition) Log() {
 	log.Println(string(b))
 }
 func (i *XDWWorkflowDocument) Log() {
-	b, _ := json.MarshalIndent(i, "", "  ")
+	b, _ := xml.MarshalIndent(i, "", "  ")
 	log.Println(string(b))
 }
 func (i *PIXPatient) Log() {
