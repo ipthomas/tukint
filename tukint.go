@@ -1783,30 +1783,36 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	}
 	wf.XDW_Doc = string(wfDoc)
 	wf.XDW_Def = string(wfDef)
-	wfs := Workflows{Action: "select"}
+	wfs := Workflows{Action: cnst.SELECT}
 	existingwf := Workflow{XDW_Key: workflowdef.Ref + workflow.Patient.ID.Extension}
 	wfs.Workflows = append(wfs.Workflows, existingwf)
 	if err := wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return err
 	}
-	if wfs.Count == 1 {
-		currentwf := wfs.Workflows[1]
-		currentwf.Version = currentwf.Version + 1
-		wfs = Workflows{Action: "update"}
-		wfs.Workflows = append(wfs.Workflows, currentwf)
-		if err := wfs.NewTukDBEvent(); err != nil {
-			log.Println(err.Error())
-			return err
+	if wfs.Count > 0 {
+		for _, cwf := range wfs.Workflows {
+			cwf.Version = cwf.Version + 1
+			wfs = Workflows{Action: cnst.UPDATE}
+			wfs.Workflows = append(wfs.Workflows, cwf)
+			if err := wfs.NewTukDBEvent(); err != nil {
+				log.Println(err.Error())
+				return err
+			}
+			log.Println("Deprecated existing workflow")
 		}
-		log.Println("Deprecated existing workflow")
 	}
-	wfs = Workflows{Action: "insert"}
+	wfs = Workflows{Action: cnst.INSERT}
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err = wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 	}
 	return err
+}
+func GetWorkflowEvents(pathway string, nhs string) {
+	evs := Events{Action: cnst.SELECT}
+	ev := Event{NhsId: nhs, Pathway: pathway, Version: "0"}
+	evs.Events = append(evs.Events, ev)
 }
 func (i *WorkflowDefinition) Log() {
 	b, _ := json.MarshalIndent(i, "", "  ")
