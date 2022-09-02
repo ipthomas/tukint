@@ -735,13 +735,43 @@ func InitLambdaVars() {
 	}
 }
 func (i *TukHttpServer) NewHTTPServer() {
-	if i.BaseFolder == "" {
-		log.Println("Invalid use of NewHTTPServer(), BaseFolder must be provded!")
+	if i.BaseFolder != "" {
+		SetBaseFolder(i.BaseFolder)
+	}
+	if base_Folder == "" {
+		log.Println("Error - BaseFolder must be set")
 		return
 	}
-	SetFoldersAndFiles(i.BaseFolder, i.LogFolder, i.ConfigFolder, i.TemplateFolder, i.CodeSystemFile)
+	if i.LogFolder != "" {
+		SetLogFolder(i.LogFolder)
+	}
+	if log_Folder == "" {
+		SetLogFolder("logs")
+	}
+	if i.ConfigFolder != "" {
+		SetConfigFolder(i.ConfigFolder)
+	}
+	if config_Folder == "" {
+		SetConfigFolder("configs")
+	}
+	if i.TemplateFolder != "" {
+		SetTemplateFolder(i.TemplateFolder)
+	}
+	if templates_Folder == "" {
+		SetTemplateFolder("templates")
+	}
+	if i.CodeSystemFile != "" {
+		SetCodeSystemFile(i.CodeSystemFile)
+	}
+	if codeSystem_File == "" {
+		SetCodeSystemFile("codesystem")
+	}
 	if i.BaseResourceUrl == "" {
 		i.BaseResourceUrl = "/eventservice"
+	} else {
+		if !strings.HasPrefix(i.BaseResourceUrl, "/") {
+			i.BaseResourceUrl = "/" + i.BaseResourceUrl
+		}
 	}
 	if i.Port == "" {
 		i.Port = ":80"
@@ -752,7 +782,7 @@ func (i *TukHttpServer) NewHTTPServer() {
 	}
 	hn, _ := os.Hostname()
 	http.HandleFunc(i.BaseResourceUrl, writeResponseHeaders(route_TUK_Server_Request))
-	log.Printf("Initialised HTTP Server - Listening on http://%s/%s%s", hn, i.BaseResourceUrl, i.Port)
+	log.Printf("Initialised HTTP Server - Listening on http://%s%s/%s", hn, i.Port, i.BaseResourceUrl)
 	monitorApp()
 	log.Fatal(http.ListenAndServe(i.Port, nil))
 }
