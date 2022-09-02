@@ -1394,6 +1394,8 @@ func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
 	}
 	return xdwdef, err
 }
+
+// NewXDWContentCreator takes input string for author details, a workflo definition and patient struct. It returns a new XDW compliant Document
 func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, authorOID string, xdwdef WorkflowDefinition, pat PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s XDW Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
 	xdwdoc := XDWWorkflowDocument{}
@@ -1669,7 +1671,7 @@ func NewWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte
 	return xdwdef, xdwdefBytes, err
 }
 
-// NewXDWContentCreator takes inputs WokflowDefinition and PIXPatient structs. It creates an IHE XDW content creator actor
+// NewXDWContentCreator takes inputs WokflowDefinition and PIXPatient structs. The author information is taken from the injected event. It creates an IHE XDW content creator actor
 // It returns a new IHE XDW complaint document for the workflow and patient
 func (i *Event) NewXDWContentCreator(xdwdef WorkflowDefinition, pat PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s Workflow Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
@@ -1765,6 +1767,31 @@ func (i *Event) NewXDWContentCreator(xdwdef WorkflowDefinition, pat PIXPatient) 
 
 	log.Println("Created new " + xdwdoc.WorkflowDefinitionReference + " Workflow for Patient " + i.NhsId)
 	return xdwdoc
+}
+func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowDefinition) error {
+	var err error
+	var wfDoc []byte
+	var wfDef []byte
+	wf := Workflow{}
+
+	wf.XDW_Key = workflow.WorkflowDefinitionReference
+	wf.XDW_UID = strings.Split(workflow.WorkflowInstanceId, "^")[0]
+	if wfDoc, err = json.Marshal(workflow); err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	if wfDef, err = json.Marshal(workflowdef); err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	wf.XDW_Doc = string(wfDoc)
+	wf.XDW_Def = string(wfDef)
+	wfs := Workflows{Action: "insert"}
+	wfs.Workflows = append(wfs.Workflows, wf)
+	if err = wfs.NewTukDBEvent(); err != nil {
+		log.Println(err.Error())
+	}
+	return err
 }
 func (i *WorkflowDefinition) Log() {
 	b, _ := json.MarshalIndent(i, "", "  ")
