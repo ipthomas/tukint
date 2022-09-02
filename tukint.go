@@ -782,7 +782,7 @@ func (i *TukHttpServer) NewHTTPServer() {
 	}
 	hn, _ := os.Hostname()
 	http.HandleFunc(i.BaseResourceUrl, writeResponseHeaders(route_TUK_Server_Request))
-	log.Printf("Initialised HTTP Server - Listening on http://%s%s/%s", hn, i.Port, i.BaseResourceUrl)
+	log.Printf("Initialised HTTP Server - Listening on http://%s%s%s", hn, i.Port, i.BaseResourceUrl)
 	monitorApp()
 	log.Fatal(http.ListenAndServe(i.Port, nil))
 }
