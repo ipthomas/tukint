@@ -828,11 +828,9 @@ func writeResponseHeaders(fn http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
-	log.Printf("Received http %s request", r.Method)
 	req := ClientRequest{Request: r}
 	if err := req.InitClientRequest(); err == nil {
-		res2B, _ := json.MarshalIndent(req, "", "  ")
-		log.Printf("Client Request\n%+v", string(res2B))
+		req.Log()
 		rsp.Write([]byte(req.ProcessClientRequest()))
 	}
 }
@@ -863,8 +861,6 @@ func (i *ClientRequest) InitClientRequest() error {
 	i.Version = util.GetIntFromString(i.Request.FormValue("version"))
 	i.XDWKey = i.Request.FormValue("xdwkey")
 	i.ReturnFormat = i.Request.Header.Get(cnst.ACCEPT)
-	res2B, _ := json.MarshalIndent(i, "", "  ")
-	log.Printf("Client Request\n%+v", string(res2B))
 	return nil
 }
 func (req *ClientRequest) ProcessClientRequest() string {
@@ -1783,6 +1779,10 @@ func (i *Subscriptions) Log() {
 	log.Println(string(b))
 }
 func (i *Subscription) Log() {
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
+}
+func (i *ClientRequest) Log() {
 	b, _ := json.MarshalIndent(i, "", "  ")
 	log.Println(string(b))
 }
