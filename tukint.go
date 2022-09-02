@@ -1461,6 +1461,15 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 // For each successful broker subcription, a Tuk Event subscription with the broker ref, workflow, topic and expression is created
 // The new xdw definition is then persisted
 // It returns a json string response containing the subscriptions created for the workflow
+//
+// ** NOTE ** Before calling RegisterXDWDefinitions() ensure all environment vars are set. For example:-
+//
+//		tukint.SetFoldersAndFiles(basepath, "logs", "configs", "templates", "codesystem")
+//		tukint.SetTUKDBURL("https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/")
+//		tukint.SetDSUBBrokerURL("http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub")
+//		tukint.SetDSUBConsumerURL("https://cjrvrddgdh.execute-api.eu-west-1.amazonaws.com/beta/")
+//
+//	If you want the log to output to a file rather than the terminal/console call tukint.InitLog() before calling RegisterXDWDefinitions() and tukint.CloseLog() before exiting
 func RegisterXDWDefinitions() (Subscriptions, error) {
 	var folderfiles []fs.DirEntry
 	var file fs.DirEntry
