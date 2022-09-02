@@ -868,7 +868,7 @@ func (i *ClientRequest) InitClientRequest() error {
 	return nil
 }
 func (req *ClientRequest) ProcessClientRequest() string {
-	log.Println("Processing Request")
+	log.Printf("Processing %s Request", req.Act)
 	switch req.Act {
 	case "dashboard":
 		return req.NewDashboardRequest()
