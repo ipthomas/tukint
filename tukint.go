@@ -1465,7 +1465,7 @@ func RegisterXDWDefinitions() (Subscriptions, error) {
 	var folderfiles []fs.DirEntry
 	var file fs.DirEntry
 	var err error
-	var rspSubs = Subscriptions{}
+	var rspSubs = Subscriptions{Action: cnst.INSERT}
 	if folderfiles, err = util.GetFolderFiles(config_Folder); err == nil {
 		for _, file = range folderfiles {
 			if strings.HasSuffix(file.Name(), ".json") && strings.Contains(file.Name(), cnst.XDW_DEFINITION_FILE) {
@@ -1476,6 +1476,8 @@ func RegisterXDWDefinitions() (Subscriptions, error) {
 							pwSubs := Subscriptions{}
 							if pwSubs, err = CreateSubscriptionsFromBrokerExpressions(pwExps); err == nil {
 								rspSubs.Subscriptions = append(rspSubs.Subscriptions, pwSubs.Subscriptions...)
+								rspSubs.Count = rspSubs.Count + pwSubs.Count
+								rspSubs.LastInsertId = pwSubs.LastInsertId
 								var xdwdefBytes = make(map[string][]byte)
 								xdwdefBytes[xdwdef.Ref] = xdwbytes
 								PersistXDWDefinitions(xdwdefBytes)
