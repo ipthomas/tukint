@@ -839,9 +839,6 @@ func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
 	}
 }
 func (i *ClientRequest) InitClientRequest() error {
-	if i.Request == nil {
-		return errors.New("clientrequest.request is not set")
-	}
 	log.Printf("Received http %s request", i.Request.Method)
 	i.Request.ParseForm()
 	i.Act = i.Request.FormValue("act")
@@ -1774,7 +1771,8 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	var wfDef []byte
 	wf := Workflow{}
 
-	wf.XDW_Key = workflow.WorkflowDefinitionReference
+	wf.Created = util.Tuk_Time()
+	wf.XDW_Key = workflowdef.Ref + workflow.Patient.ID.Extension
 	wf.XDW_UID = strings.Split(workflow.WorkflowInstanceId, "^")[0]
 	if wfDoc, err = json.Marshal(workflow); err != nil {
 		log.Println(err.Error())
