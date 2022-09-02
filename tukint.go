@@ -484,8 +484,8 @@ type XDWTask struct {
 type TaskData struct {
 	TaskDetails TaskDetails `xml:"taskDetails"`
 	Description string      `xml:"description"`
-	Input       []Input     `xml:"input"`
-	Output      []Output    `xml:"output"`
+	Input       []Input     `xml:"input,omitempty"`
+	Output      []Output    `xml:"output,omitempty"`
 }
 type TaskDetails struct {
 	ID                    string `xml:"id"`
