@@ -923,7 +923,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	for _, wf := range wfs.Workflows {
 
 		if wf.Id > 0 {
-			xdw, err := InitXDWDocStruc(wf)
+			xdw, err := InitXDWWorkflowDocument(wf)
 			if err != nil {
 				continue
 			}
@@ -962,7 +962,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	log.Printf("Returning %v Workflows", tmpltwfs.Count)
 	return b.String()
 }
-func InitXDWDocStruc(wf Workflow) (XDWWorkflowDocument, error) {
+func InitXDWWorkflowDocument(wf Workflow) (XDWWorkflowDocument, error) {
 	var err error
 	xdwStruc := XDWWorkflowDocument{}
 	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwStruc)
@@ -1004,7 +1004,7 @@ func (i *ClientRequest) NewDashboardRequest() string {
 		if wf.Id != 0 {
 			log.Println("Processing " + wf.XDW_Key + " Workflow")
 			dashboard.Total = dashboard.Total + 1
-			xdw, err := InitXDWDocStruc(wf)
+			xdw, err := InitXDWWorkflowDocument(wf)
 			if err != nil {
 				continue
 			}
