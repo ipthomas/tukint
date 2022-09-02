@@ -1770,7 +1770,6 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	var wfDoc []byte
 	var wfDef []byte
 	wf := Workflow{}
-
 	wf.Created = util.Tuk_Time()
 	wf.XDW_Key = workflowdef.Ref + workflow.Patient.ID.Extension
 	wf.XDW_UID = strings.Split(workflow.WorkflowInstanceId, "^")[0]
@@ -1784,7 +1783,25 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	}
 	wf.XDW_Doc = string(wfDoc)
 	wf.XDW_Def = string(wfDef)
-	wfs := Workflows{Action: "insert"}
+	wfs := Workflows{Action: "select"}
+	existingwf := Workflow{XDW_Key: workflowdef.Ref + workflow.Patient.ID.Extension}
+	wfs.Workflows = append(wfs.Workflows, existingwf)
+	if err := wfs.NewTukDBEvent(); err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	if wfs.Count == 1 {
+		currentwf := wfs.Workflows[1]
+		currentwf.Version = currentwf.Version + 1
+		wfs = Workflows{Action: "update"}
+		wfs.Workflows = append(wfs.Workflows, currentwf)
+		if err := wfs.NewTukDBEvent(); err != nil {
+			log.Println(err.Error())
+			return err
+		}
+		log.Println("Deprecated existing workflow")
+	}
+	wfs = Workflows{Action: "insert"}
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err = wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
