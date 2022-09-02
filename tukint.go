@@ -66,6 +66,7 @@ type TUKServiceState struct {
 }
 type Dashboard struct {
 	Total      int
+	Ready      int
 	Open       int
 	InProgress int
 	Closed     int
@@ -1013,6 +1014,8 @@ func (i *ClientRequest) NewDashboardRequest() string {
 			log.Printf("Workflow Created on %s for Patient NHS ID %s", xdw.EffectiveTime.Value, xdw.Patient.ID.Extension)
 			log.Printf("Workflow Status %s", xdw.WorkflowStatus)
 			switch xdw.WorkflowStatus {
+			case "READY":
+				dashboard.Ready = dashboard.Ready + 1
 			case "OPEN":
 				dashboard.Open = dashboard.Open + 1
 			case "IN_PROGRESS":
@@ -1835,8 +1838,7 @@ func (i *Subscription) Log() {
 	log.Println(string(b))
 }
 func (i *ClientRequest) Log() {
-	b, _ := json.MarshalIndent(i, "", "  ")
-	log.Println(string(b))
+
 }
 func (i *Event) InitDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	i.Creationtime = util.Tuk_Time()
