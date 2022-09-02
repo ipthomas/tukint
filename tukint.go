@@ -1473,7 +1473,9 @@ func RegisterXDWDefinitions() (Subscriptions, error) {
 					if err = DeleteTukWorkflowSubscriptions(xdwdef); err == nil {
 						if err = DeleteTukWorkflowDefinition(xdwdef); err == nil {
 							pwExps := GetXDWBrokerExpressions(xdwdef)
-							if rspSubs, err = CreateSubscriptionsFromBrokerExpressions(pwExps); err == nil {
+							pwSubs := Subscriptions{}
+							if pwSubs, err = CreateSubscriptionsFromBrokerExpressions(pwExps); err == nil {
+								rspSubs.Subscriptions = append(rspSubs.Subscriptions, pwSubs.Subscriptions...)
 								var xdwdefBytes = make(map[string][]byte)
 								xdwdefBytes[xdwdef.Ref] = xdwbytes
 								PersistXDWDefinitions(xdwdefBytes)
