@@ -23,15 +23,14 @@ var (
 // TemplateFuncMap returns a functionMap of tukutils for use in templates
 func TemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
-		"dtday":       Tuk_Day,
-		"dtmonth":     Tuk_Month,
-		"dtyear":      Tuk_Year,
-		"mappedid":    GetCodeSystemVal,
-		"prettytime":  PrettyTime,
-		"newUuid":     NewUuid,
-		"newid":       Newid,
-		"splitxdwkey": SplitXDWKey,
-		"tuktime":     Tuk_Time,
+		"dtday":      Tuk_Day,
+		"dtmonth":    Tuk_Month,
+		"dtyear":     Tuk_Year,
+		"mappedid":   GetCodeSystemVal,
+		"prettytime": PrettyTime,
+		"newuuid":    NewUuid,
+		"newid":      Newid,
+		"tuktime":    Tuk_Time,
 	}
 }
 

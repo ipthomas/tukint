@@ -1625,6 +1625,9 @@ func NewWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte
 	}
 	return xdwdef, xdwdefBytes, err
 }
+
+// NewXDWContentCreator takes inputs WokflowDefinition and PIXPatient structs. It creates an IHE XDW content creator actor
+// It returns a new IHE XDW complaint document for the workflow and patient
 func (i *Event) NewXDWContentCreator(xdwdef WorkflowDefinition, pat PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s Workflow Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
 	xdwdoc := XDWWorkflowDocument{}
