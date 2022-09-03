@@ -70,6 +70,7 @@ type Dashboard struct {
 	Open       int
 	InProgress int
 	Closed     int
+	ServerURL  string
 }
 type TmpltWorkflow struct {
 	Created   string
@@ -538,6 +539,7 @@ type TaskEvent struct {
 	Status     string `xml:"status"`
 }
 type ClientRequest struct {
+	ServerURL    string `json:"serverurl"`
 	Act          string `json:"act"`
 	User         string `json:"user"`
 	Org          string `json:"org"`
@@ -586,6 +588,9 @@ type TukAuthors struct {
 }
 
 var (
+	hostname                           = ""
+	port                               = "8080"
+	baseResourceUrl                    = "/eventservice"
 	htmlTemplates                      *template.Template
 	xmlTemplates                       *template.Template
 	logFile                            *os.File
@@ -767,26 +772,26 @@ func (i *TukHttpServer) NewHTTPServer() {
 		SetCodeSystemFile("codesystem")
 	}
 	if i.BaseResourceUrl == "" {
-		i.BaseResourceUrl = "/eventservice"
+		baseResourceUrl = "/eventservice"
 	} else {
 		if !strings.HasPrefix(i.BaseResourceUrl, "/") {
-			i.BaseResourceUrl = "/" + i.BaseResourceUrl
+			baseResourceUrl = "/" + i.BaseResourceUrl
 		}
 	}
 	if i.Port == "" {
-		i.Port = ":8080"
+		port = ":8080"
 	} else {
 		if !strings.HasPrefix(i.Port, ":") {
-			i.Port = ":" + i.Port
+			port = ":" + i.Port
 		}
 	}
 	if err := LoadTemplates(); err != nil {
 		log.Println(err.Error())
 		return
 	}
-	hn, _ := os.Hostname()
+	hostname, _ = os.Hostname()
 	http.HandleFunc(i.BaseResourceUrl, writeResponseHeaders(route_TUK_Server_Request))
-	log.Printf("Initialised HTTP Server - Listening on http://%s%s%s", hn, i.Port, i.BaseResourceUrl)
+	log.Printf("Initialised HTTP Server - Listening on %s", getServerURL())
 	monitorApp()
 	log.Fatal(http.ListenAndServe(i.Port, nil))
 }
@@ -831,8 +836,11 @@ func writeResponseHeaders(fn http.HandlerFunc) http.HandlerFunc {
 		fn(w, r)
 	}
 }
+func getServerURL() string {
+	return "http://" + hostname + port + baseResourceUrl
+}
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
-	req := ClientRequest{}
+	req := ClientRequest{ServerURL: getServerURL()}
 	if err := req.InitClientRequest(r); err == nil {
 		req.Log()
 		rsp.Write([]byte(req.ProcessClientRequest()))
@@ -1005,15 +1013,13 @@ func (i *ClientRequest) NewDashboardRequest() string {
 	log.Printf("Processing %v workflows", wfs.Count)
 	for _, wf := range wfs.Workflows {
 		if wf.Id != 0 {
-			log.Println("Processing " + wf.XDW_Key + " Workflow")
 			dashboard.Total = dashboard.Total + 1
 			xdw, err := InitXDWWorkflowDocument(wf)
 			if err != nil {
 				continue
 			}
 			json.Unmarshal([]byte(wf.XDW_Doc), &xdw)
-			log.Printf("Workflow Created on %s for Patient NHS ID %s", xdw.EffectiveTime.Value, xdw.Patient.ID.Extension)
-			log.Printf("Workflow Status %s", xdw.WorkflowStatus)
+			log.Printf("Workflow Created on %s for Patient NHS ID %s Workflow Status %s", xdw.EffectiveTime.Value, xdw.Patient.ID.Extension, xdw.WorkflowStatus)
 			switch xdw.WorkflowStatus {
 			case "READY":
 				dashboard.Ready = dashboard.Ready + 1
