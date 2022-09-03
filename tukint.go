@@ -662,9 +662,6 @@ func SetCodeSystemFile(codeSystemFile string) {
 	} else {
 		codeSystem_File = config_Folder + "/" + codeSystemFile + ".json"
 	}
-	if base_Folder != "" {
-		util.InitCodeSystem(codeSystem_File)
-	}
 }
 
 // SetServerPort sets the Tuk Server port.
@@ -699,6 +696,10 @@ func SetFoldersAndFiles(baseFolder string, logFolder string, configFolder string
 	SetConfigFolder(configFolder)
 	SetTemplateFolder(templateFolder)
 	SetCodeSystemFile(codeSysFile)
+}
+
+func InitCodeSystem() {
+	util.InitCodeSystem(codeSystem_File)
 }
 
 // InitLog sends log messages to a log file rather than the console
@@ -870,6 +871,12 @@ func writeResponseHeaders(fn http.HandlerFunc) http.HandlerFunc {
 func GetServerURL() string {
 	return "http://" + hostname + port + baseResourceUrl
 }
+func InitXDWWorkflowDocument(wf Workflow) (XDWWorkflowDocument, error) {
+	var err error
+	xdwStruc := XDWWorkflowDocument{}
+	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwStruc)
+	return xdwStruc, err
+}
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
 	req := ClientRequest{ServerURL: GetServerURL()}
 	if err := req.InitClientRequest(r); err == nil {
@@ -940,10 +947,11 @@ func (i *ClientRequest) NewTaskRequest() string {
 		return err.Error()
 	}
 	type itmplt struct {
-		TaskId string
-		XDW    XDWWorkflowDocument
+		ServerURL string
+		TaskId    string
+		XDW       XDWWorkflowDocument
 	}
-	it := itmplt{TaskId: util.GetStringFromInt(i.ID), XDW: xdw}
+	it := itmplt{TaskId: util.GetStringFromInt(i.ID), ServerURL: GetServerURL(), XDW: xdw}
 	var b bytes.Buffer
 	err := htmlTemplates.ExecuteTemplate(&b, "snip_workflow_task", it)
 	if err != nil {
@@ -1004,12 +1012,6 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	log.Printf("Returning %v Workflows", tmpltwfs.Count)
 	return b.String()
 }
-func InitXDWWorkflowDocument(wf Workflow) (XDWWorkflowDocument, error) {
-	var err error
-	xdwStruc := XDWWorkflowDocument{}
-	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwStruc)
-	return xdwStruc, err
-}
 func (i *ClientRequest) NewWorkflowRequest() string {
 	if i.XDWKey == "" && (i.Pathway == "" && i.NHS == "") {
 		return "Invalid request. Either xdwkey or Both Pathway and NHS ID are required"
@@ -1027,9 +1029,17 @@ func (i *ClientRequest) NewWorkflowRequest() string {
 	if wfs.Count != 1 {
 		return "No Workflow Found with XDW Key - " + i.XDWKey
 	}
-	json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &xdw)
+	if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &xdw); err != nil {
+		log.Println(err.Error())
+		return err.Error()
+	}
+	type wftmplt struct {
+		ServerURL string
+		XDW       XDWWorkflowDocument
+	}
+	itmplt := wftmplt{ServerURL: GetServerURL(), XDW: xdw}
 	var b bytes.Buffer
-	err := htmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOW, xdw)
+	err := htmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOW, itmplt)
 	if err != nil {
 		log.Println(err.Error())
 	}
