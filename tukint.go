@@ -83,6 +83,7 @@ type TmpltWorkflow struct {
 }
 type TmpltWorkflows struct {
 	Count     int
+	ServerURL string
 	Workflows []TmpltWorkflow
 }
 type WorkflowState struct {
@@ -951,7 +952,7 @@ func (i *ClientRequest) NewTaskRequest() string {
 	return b.String()
 }
 func (i *ClientRequest) NewWorkflowsRequest() string {
-	tmpltwfs := TmpltWorkflows{}
+	tmpltwfs := TmpltWorkflows{ServerURL: GetServerURL()}
 	wfs := Workflows{Action: cnst.SELECT}
 	wf := Workflow{}
 
