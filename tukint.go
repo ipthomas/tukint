@@ -589,16 +589,16 @@ type TukAuthors struct {
 
 var (
 	hostname                           = ""
-	port                               = "8080"
+	port                               = ":8080"
 	baseResourceUrl                    = "/eventservice"
 	htmlTemplates                      *template.Template
 	xmlTemplates                       *template.Template
 	logFile                            *os.File
 	base_Folder                        = ""
-	log_Folder                         = ""
-	config_Folder                      = ""
-	templates_Folder                   = ""
-	codeSystem_File                    = "codesystem.json"
+	log_Folder                         = base_Folder + "/logs"
+	config_Folder                      = base_Folder + "/configs"
+	templates_Folder                   = config_Folder + "/templates"
+	codeSystem_File                    = config_Folder + "/codesystem.json"
 	TUK_DB_URL                         = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
 	DSUB_BROKER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
 	DSUB_CONSUMER_URL                  = "https://cjrvrddgdh.execute-api.eu-west-1.amazonaws.com/beta/"
@@ -637,23 +637,61 @@ func SetRegionalOID(regionaloid string) {
 	REGIONAL_OID = regionaloid
 }
 func SetBaseFolder(baseFolder string) {
-	base_Folder = baseFolder + "/"
+	base_Folder = baseFolder
 }
 func SetLogFolder(logFolder string) {
-	log_Folder = base_Folder + logFolder + "/"
+	log_Folder = base_Folder + "/" + logFolder
 }
 func SetConfigFolder(configFolder string) {
-	config_Folder = base_Folder + configFolder + "/"
+	config_Folder = base_Folder + "/" + configFolder
 }
 func SetTemplateFolder(templateFolder string) {
-	templates_Folder = config_Folder + templateFolder + "/"
+	templates_Folder = config_Folder + "/" + templateFolder
 }
+
+// SetCodeSystemFile sets the codesystem file.
+//
+//	The codesystem file can be used to provide mapping of values.
+//	If the input value does not have a suffix of `.json`, .json is appended
+//
+// The default filename is `codesystem.json'
 func SetCodeSystemFile(codeSystemFile string) {
-	codeSystem_File = config_Folder + codeSystemFile + ".json"
+	if strings.HasSuffix(codeSystemFile, ".json") {
+		codeSystem_File = config_Folder + "/" + codeSystemFile
+	} else {
+		codeSystem_File = config_Folder + "/" + codeSystemFile + ".json"
+	}
 	if base_Folder != "" {
 		util.InitCodeSystem(codeSystem_File)
 	}
 }
+
+// SetServerPort sets the Tuk Server port.
+//
+//	The default is `8080'
+func SetServerPort(srvport string) {
+	if !strings.HasPrefix(srvport, ":") {
+		port = ":" + srvport
+	}
+}
+
+// SetServerResourceURL sets the Tuk Server URL base resource.
+//
+//	The default is `/eventservice'
+func SetServerResourceURL(url string) {
+	if !strings.HasPrefix(url, "/") {
+		baseResourceUrl = "/" + url
+	}
+}
+
+// SetFoldersAndFiles is a convieniance method to intialise the tuk interface system folders and files.
+//
+//	It calls :
+//		SetBaseFolder(baseFolder)
+//		SetLogFolder(logFolder)
+//		SetConfigFolder(configFolder)
+//		SetTemplateFolder(templateFolder)
+//		SetCodeSystemFile(codeSysFile)
 func SetFoldersAndFiles(baseFolder string, logFolder string, configFolder string, templateFolder string, codeSysFile string) {
 	SetBaseFolder(baseFolder)
 	SetLogFolder(logFolder)
@@ -771,19 +809,11 @@ func (i *TukHttpServer) NewHTTPServer() {
 	if codeSystem_File == "" {
 		SetCodeSystemFile("codesystem")
 	}
-	if i.BaseResourceUrl == "" {
-		baseResourceUrl = "/eventservice"
-	} else {
-		if !strings.HasPrefix(i.BaseResourceUrl, "/") {
-			baseResourceUrl = "/" + i.BaseResourceUrl
-		}
+	if i.BaseResourceUrl != "" {
+		SetServerResourceURL(i.BaseResourceUrl)
 	}
-	if i.Port == "" {
-		port = ":8080"
-	} else {
-		if !strings.HasPrefix(i.Port, ":") {
-			port = ":" + i.Port
-		}
+	if i.Port != "" {
+		SetServerPort(i.Port)
 	}
 	if err := LoadTemplates(); err != nil {
 		log.Println(err.Error())
