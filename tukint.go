@@ -736,11 +736,11 @@ func CloseLog() {
 }
 func LoadTemplates() error {
 	var err error
-	htmlTemplates, err = template.New(cnst.HTML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "*.html")
+	htmlTemplates, err = template.New(cnst.HTML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "/*.html")
 	if err != nil {
 		return err
 	}
-	xmlTemplates, err = template.New(cnst.XML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "*.xml")
+	xmlTemplates, err = template.New(cnst.XML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "/*.xml")
 	if err != nil {
 		return err
 	}
