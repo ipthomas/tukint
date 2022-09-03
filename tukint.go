@@ -538,7 +538,6 @@ type TaskEvent struct {
 	Status     string `xml:"status"`
 }
 type ClientRequest struct {
-	Request      *http.Request
 	Act          string `json:"act"`
 	User         string `json:"user"`
 	Org          string `json:"org"`
@@ -833,36 +832,38 @@ func writeResponseHeaders(fn http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
-	req := ClientRequest{Request: r}
-	if err := req.InitClientRequest(); err == nil {
+	req := ClientRequest{}
+	if err := req.InitClientRequest(r); err == nil {
 		req.Log()
 		rsp.Write([]byte(req.ProcessClientRequest()))
+	} else {
+		log.Println(err.Error())
 	}
 }
-func (i *ClientRequest) InitClientRequest() error {
-	log.Printf("Received http %s request", i.Request.Method)
-	i.Request.ParseForm()
-	i.Act = i.Request.FormValue("act")
-	i.User = i.Request.FormValue("user")
-	i.Org = i.Request.FormValue("org")
-	i.Orgoid = util.GetCodeSystemVal(i.Request.FormValue("org"))
-	i.Role = i.Request.FormValue("role")
-	i.NHS = i.Request.FormValue("nhs")
-	i.PID = i.Request.FormValue("pid")
-	i.PIDOrg = i.Request.FormValue("pidorg")
-	i.PIDOID = util.GetCodeSystemVal(i.Request.FormValue("pidorg"))
-	i.FamilyName = i.Request.FormValue("familyname")
-	i.GivenName = i.Request.FormValue("givenname")
-	i.DOB = i.Request.FormValue("dob")
-	i.Gender = i.Request.FormValue("gender")
-	i.ZIP = i.Request.FormValue("zip")
-	i.Status = i.Request.FormValue("status")
-	i.ID = util.GetIntFromString(i.Request.FormValue("id"))
-	i.Task = i.Request.FormValue("task")
-	i.Pathway = i.Request.FormValue("pathway")
-	i.Version = util.GetIntFromString(i.Request.FormValue("version"))
-	i.XDWKey = i.Request.FormValue("xdwkey")
-	i.ReturnFormat = i.Request.Header.Get(cnst.ACCEPT)
+func (i *ClientRequest) InitClientRequest(req *http.Request) error {
+	log.Printf("Received http %s request", req.Method)
+	req.ParseForm()
+	i.Act = req.FormValue("act")
+	i.User = req.FormValue("user")
+	i.Org = req.FormValue("org")
+	i.Orgoid = util.GetCodeSystemVal(req.FormValue("org"))
+	i.Role = req.FormValue("role")
+	i.NHS = req.FormValue("nhs")
+	i.PID = req.FormValue("pid")
+	i.PIDOrg = req.FormValue("pidorg")
+	i.PIDOID = util.GetCodeSystemVal(req.FormValue("pidorg"))
+	i.FamilyName = req.FormValue("familyname")
+	i.GivenName = req.FormValue("givenname")
+	i.DOB = req.FormValue("dob")
+	i.Gender = req.FormValue("gender")
+	i.ZIP = req.FormValue("zip")
+	i.Status = req.FormValue("status")
+	i.ID = util.GetIntFromString(req.FormValue("id"))
+	i.Task = req.FormValue("task")
+	i.Pathway = req.FormValue("pathway")
+	i.Version = util.GetIntFromString(req.FormValue("version"))
+	i.XDWKey = req.FormValue("xdwkey")
+	i.ReturnFormat = req.Header.Get(cnst.ACCEPT)
 	return nil
 }
 func (req *ClientRequest) ProcessClientRequest() string {
@@ -1838,7 +1839,8 @@ func (i *Subscription) Log() {
 	log.Println(string(b))
 }
 func (i *ClientRequest) Log() {
-
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
 }
 func (i *Event) InitDSUBEvent(dsubNotify DSUBNotifyMessage) {
 	i.Creationtime = util.Tuk_Time()
@@ -2167,29 +2169,24 @@ func getHttpMethod(action string) string {
 	}
 }
 func newTUKDBRequest(httpMethod string, resource string, body []byte) ([]byte, error) {
+	var err error
+	var req *http.Request
+	var resp *http.Response
+	var bodyBytes []byte
 	client := &http.Client{}
-	req, err := http.NewRequest(httpMethod, TUK_DB_URL+resource, bytes.NewBuffer(body))
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	req.Header.Add(cnst.CONTENT_TYPE, cnst.APPLICATION_JSON_CHARSET_UTF_8)
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	log.Printf("Response Status Code %v\n", resp.StatusCode)
-	if resp.StatusCode == http.StatusOK {
-		bodyBytes, err := io.ReadAll(resp.Body)
-		log.Println(string(bodyBytes))
-		if err != nil {
-			log.Println(err)
-		} else {
-			return bodyBytes, nil
+	if req, err = http.NewRequest(httpMethod, TUK_DB_URL+resource, bytes.NewBuffer(body)); err == nil {
+		req.Header.Add(cnst.CONTENT_TYPE, cnst.APPLICATION_JSON_CHARSET_UTF_8)
+		if resp, err = client.Do(req); err == nil {
+			log.Printf("Response Status Code %v\n", resp.StatusCode)
+			if resp.StatusCode == http.StatusOK {
+				if bodyBytes, err = io.ReadAll(resp.Body); err == nil {
+					return bodyBytes, err
+				}
+			}
 		}
 	}
-	return nil, err
+	log.Println(err.Error())
+	return bodyBytes, err
 }
 func newSOAPRequest(url string, soapAction string, body []byte, ctx context.Context) (*http.Response, error) {
 	var err error
