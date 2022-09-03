@@ -791,7 +791,7 @@ func (i *TukHttpServer) NewHTTPServer() {
 	}
 	hostname, _ = os.Hostname()
 	http.HandleFunc(i.BaseResourceUrl, writeResponseHeaders(route_TUK_Server_Request))
-	log.Printf("Initialised HTTP Server - Listening on %s", getServerURL())
+	log.Printf("Initialised HTTP Server - Listening on %s", GetServerURL())
 	monitorApp()
 	log.Fatal(http.ListenAndServe(i.Port, nil))
 }
@@ -836,11 +836,11 @@ func writeResponseHeaders(fn http.HandlerFunc) http.HandlerFunc {
 		fn(w, r)
 	}
 }
-func getServerURL() string {
+func GetServerURL() string {
 	return "http://" + hostname + port + baseResourceUrl
 }
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
-	req := ClientRequest{ServerURL: getServerURL()}
+	req := ClientRequest{ServerURL: GetServerURL()}
 	if err := req.InitClientRequest(r); err == nil {
 		req.Log()
 		rsp.Write([]byte(req.ProcessClientRequest()))
