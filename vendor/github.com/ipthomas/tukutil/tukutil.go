@@ -39,7 +39,6 @@ func SplitXDWKey(xdwkey string) (string, string) {
 	var pwy string
 	var nhs string
 	if len(xdwkey) > 10 {
-		log.Println("Parsing XDWKey for Pathway and NHS ID")
 		pwy = xdwkey[:len(xdwkey)-10]
 		nhs = strings.TrimPrefix(xdwkey, pwy)
 	}
@@ -64,7 +63,12 @@ func InitCodeSystem(codesystemFile string) error {
 		return err
 	}
 	log.Printf("Loaded %v code system key values", len(CodeSystem))
+	Log(CodeSystem)
 	return nil
+}
+func Log(i interface{}) {
+	b, _ := json.MarshalIndent(i, "", "  ")
+	log.Println(string(b))
 }
 
 // GetCodeSystemVal takes a string input (key) and returns the string value corresponding to the input (key) from the codesystem

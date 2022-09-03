@@ -6,3 +6,5 @@ github.com/ipthomas/tukutil v0.0.0-20220901093312-16e6f3317f84 h1:FGNtw7qG7eXk4r
 github.com/ipthomas/tukutil v0.0.0-20220901093312-16e6f3317f84/go.mod h1:SRe4O0j2q9fnpN1W9d077JmHv4OiOHaXT2D6dUKBdBU=
 github.com/ipthomas/tukutil v0.0.0-20220901150521-85539a9139ad h1:AzEb2UpYQTTXkiWtl8r0fkt0U0yLTQ7wXrRb2gQMWO8=
 github.com/ipthomas/tukutil v0.0.0-20220901150521-85539a9139ad/go.mod h1:SRe4O0j2q9fnpN1W9d077JmHv4OiOHaXT2D6dUKBdBU=
+github.com/ipthomas/tukutil v0.0.0-20220903140425-a44208f43b60 h1:NObWQQrwzr1Z8IJivRoF5qVn3KSbV6EcTCNkTFUemYM=
+github.com/ipthomas/tukutil v0.0.0-20220903140425-a44208f43b60/go.mod h1:SRe4O0j2q9fnpN1W9d077JmHv4OiOHaXT2D6dUKBdBU=
