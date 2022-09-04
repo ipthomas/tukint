@@ -1080,17 +1080,16 @@ func (i *ClientRequest) NewWorkflowRequest() string {
 func (i *ClientRequest) NewDashboardRequest() string {
 	dashboard := Dashboard{}
 	wfs := Workflows{Action: cnst.SELECT}
-	wfs.Workflows = append(wfs.Workflows, Workflow{})
 	wfs.NewTukDBEvent()
 	log.Printf("Processing %v workflows", wfs.Count)
 	for _, wf := range wfs.Workflows {
-		if wf.Id != 0 {
-			dashboard.Total = dashboard.Total + 1
-			xdw, err := InitXDWWorkflowDocument(wf)
-			if err != nil {
-				continue
-			}
-			json.Unmarshal([]byte(wf.XDW_Doc), &xdw)
+		dashboard.Total = dashboard.Total + 1
+		xdw, err := InitXDWWorkflowDocument(wf)
+		if err != nil {
+			continue
+		}
+		json.Unmarshal([]byte(wf.XDW_Doc), &xdw)
+		if wf.Version == 0 {
 			log.Printf("Workflow Created on %s for Patient NHS ID %s Workflow Status %s", xdw.EffectiveTime.Value, xdw.Patient.ID.Extension, xdw.WorkflowStatus)
 			switch xdw.WorkflowStatus {
 			case "READY":
@@ -1860,8 +1859,6 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	persistwf.XDW_Doc = string(wfDoc)
 	persistwf.XDW_Def = string(wfDef)
 	existingwfs := Workflows{Action: cnst.SELECT}
-	existingwf := Workflow{XDW_Key: workflowdef.Ref + workflow.Patient.ID.Extension}
-	existingwfs.Workflows = append(existingwfs.Workflows, existingwf)
 	if err := existingwfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return err
@@ -1869,17 +1866,19 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	if existingwfs.Count > 0 {
 		for k, exwf := range existingwfs.Workflows {
 			if k > 0 {
-				updtwfs := Workflows{Action: cnst.UPDATE}
-				updtwf := Workflow{
-					XDW_Key: exwf.XDW_Key,
-					Version: exwf.Version,
+				if exwf.XDW_Key == workflowdef.Ref+workflow.Patient.ID.Extension {
+					updtwfs := Workflows{Action: cnst.UPDATE}
+					updtwf := Workflow{
+						XDW_Key: exwf.XDW_Key,
+						Version: exwf.Version,
+					}
+					updtwfs.Workflows = append(updtwfs.Workflows, updtwf)
+					if err := updtwfs.NewTukDBEvent(); err != nil {
+						log.Println(err.Error())
+						return err
+					}
+					log.Println("Deprecated existing workflow")
 				}
-				updtwfs.Workflows = append(updtwfs.Workflows, updtwf)
-				if err := updtwfs.NewTukDBEvent(); err != nil {
-					log.Println(err.Error())
-					return err
-				}
-				log.Println("Deprecated existing workflow")
 			}
 		}
 	}
@@ -2105,7 +2104,7 @@ func (i *PIXmQuery) InitPIXPatient() error {
 	req.Header.Set(cnst.CONTENT_TYPE, cnst.APPLICATION_JSON)
 	req.Header.Set(cnst.ACCEPT, cnst.ALL)
 	req.Header.Set(cnst.CONNECTION, cnst.KEEP_ALIVE)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5000)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(2000)*time.Millisecond)
 	defer cancel()
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
