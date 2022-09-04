@@ -913,7 +913,7 @@ func (req *ClientRequest) ProcessClientRequest() string {
 		return req.NewWorkflowsRequest()
 	case cnst.WORKFLOW:
 		return req.NewWorkflowRequest()
-	case "task":
+	case cnst.TASK:
 		return req.NewTaskRequest()
 	}
 	return "Nothing to process"
