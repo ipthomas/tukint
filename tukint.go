@@ -930,10 +930,11 @@ func (i *ClientRequest) NewTaskRequest() string {
 	if i.ID < 1 || i.Pathway == "" || i.NHS == "" {
 		return "Invalid request. Task ID, Pathway and NHS ID are required"
 	}
-	xdw := XDWWorkflowDocument{}
+	wfdoc := XDWWorkflowDocument{}
+	wfdef := WorkflowDefinition{}
+
 	wfs := Workflows{Action: cnst.SELECT}
 	wf := Workflow{XDW_Key: i.XDWKey, Version: i.Version}
-
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err := wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
@@ -942,7 +943,11 @@ func (i *ClientRequest) NewTaskRequest() string {
 	if wfs.Count != 1 {
 		return "No Workflow found for xdwkey = " + i.XDWKey
 	}
-	if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &xdw); err != nil {
+	if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &wfdoc); err != nil {
+		log.Println(err.Error())
+		return err.Error()
+	}
+	if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Def), &wfdef); err != nil {
 		log.Println(err.Error())
 		return err.Error()
 	}
@@ -950,8 +955,9 @@ func (i *ClientRequest) NewTaskRequest() string {
 		ServerURL string
 		TaskId    string
 		XDW       XDWWorkflowDocument
+		XDWDef    WorkflowDefinition
 	}
-	it := itmplt{TaskId: util.GetStringFromInt(i.ID), ServerURL: GetServerURL(), XDW: xdw}
+	it := itmplt{TaskId: util.GetStringFromInt(i.ID), ServerURL: GetServerURL(), XDW: wfdoc, XDWDef: wfdef}
 	var b bytes.Buffer
 	err := htmlTemplates.ExecuteTemplate(&b, "snip_workflow_task", it)
 	if err != nil {
