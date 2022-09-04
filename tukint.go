@@ -984,6 +984,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	log.Printf("Processing %v workflows", tukwfs.Count)
 	for _, wf := range tukwfs.Workflows {
 		if wf.Id > 0 {
+			pat := PIXPatient{}
 			log.Printf("Initialising workflow document - id %v", wf.Id)
 			xdw, err := InitXDWWorkflowDocument(wf)
 			if err != nil {
@@ -997,12 +998,12 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 				continue
 			}
 			log.Printf("Initialised Workflow definition for Workflow document %s", xdwdef.Ref)
-			pat, err := NewPIXmConsumer(xdw.Patient.ID.Extension, NHS_OID)
-			if err != nil {
-				log.Println(err.Error())
-				continue
+			pat, _ = NewPIXmConsumer(xdw.Patient.ID.Extension, NHS_OID)
+			if len(pat.NHSID) != 10 {
+				log.Println("Unable to obtain valid patient details")
+			} else {
+				log.Printf("Obtained Patient details for Workflow %s", wf.XDW_Key)
 			}
-			log.Printf("Obtained Patient details for Workflow %s", wf.XDW_Key)
 			tmpltworkflow := TmpltWorkflow{}
 			if i.Status != "" {
 				log.Printf("Obtaining Workflows with status = %s", i.Status)
