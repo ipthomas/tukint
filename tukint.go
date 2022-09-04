@@ -866,7 +866,7 @@ func InitXDWWorkflowDocument(wf Workflow) (XDWWorkflowDocument, error) {
 func InitXDWDefinition(wf Workflow) (WorkflowDefinition, error) {
 	var err error
 	xdwdef := WorkflowDefinition{}
-	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwdef)
+	err = json.Unmarshal([]byte(wf.XDW_Def), &xdwdef)
 	return xdwdef, err
 }
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {

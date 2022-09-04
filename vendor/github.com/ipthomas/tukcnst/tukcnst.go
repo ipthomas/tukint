@@ -6,7 +6,7 @@
 package tukcnst
 
 const (
-	TEST1                           = "test"
+	TASK                            = "task"
 	NO_VALUE                        = "Not Provided"
 	TUK_DB_TABLE_SUBSCRIPTIONS      = "subscriptions"
 	TUK_DB_TABLE_XDWS               = "xdws"
