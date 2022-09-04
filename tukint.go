@@ -984,18 +984,25 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	log.Printf("Processing %v workflows", tukwfs.Count)
 	for _, wf := range tukwfs.Workflows {
 		if wf.Id > 0 {
+			log.Printf("Initialising workflow document - id %v", wf.Id)
 			xdw, err := InitXDWWorkflowDocument(wf)
 			if err != nil {
+				log.Println(err.Error())
 				continue
 			}
+			log.Printf("Initialised Workflow document - %s", wf.XDW_Key)
 			xdwdef, err := InitXDWDefinition(wf)
 			if err != nil {
+				log.Println(err.Error())
 				continue
 			}
+			log.Printf("Initialised Workflow definition for Workflow document %s", xdwdef.Ref)
 			pat, err := NewPIXmConsumer(xdw.Patient.ID.Extension, NHS_OID)
 			if err != nil {
+				log.Println(err.Error())
 				continue
 			}
+			log.Printf("Obtained Patient details for Workflow %s", wf.XDW_Key)
 			tmpltworkflow := TmpltWorkflow{}
 			if i.Status != "" {
 				log.Printf("Obtaining Workflows with status = %s", i.Status)
@@ -1108,7 +1115,7 @@ func (i *EventMessage) NewDSUBBrokerEvent() error {
 	var err error
 	var dsubNotify DSUBNotifyMessage
 	InitLambdaVars()
-	log.Printf("Processing DSUB Broker Event Message\n%s", i.Message)
+	log.Printf("Processing DSUB Broker Notfy Message\n%s", i.Message)
 	if dsubNotify, err = i.NewDSUBNotifyMessage(); err == nil {
 		dsubEvent := Event{}
 		dsubEvent.InitDSUBEvent(dsubNotify)
@@ -1117,37 +1124,39 @@ func (i *EventMessage) NewDSUBBrokerEvent() error {
 		}
 		log.Printf("Found Subscription Reference %s. Setting Event state from Notify Message", dsubEvent.BrokerRef)
 		if dsubEvent.XdsPid == "" {
-			return errors.New("no xds pid found in notification message")
+			return errors.New("no pid found in notification message")
 		}
 		log.Printf("Checking for TUK Event subscriptions with Broker Ref = %s", dsubEvent.BrokerRef)
 		tukdbSubs := Subscriptions{Action: "select"}
-		tukSub := Subscription{BrokerRef: dsubEvent.BrokerRef}
-		tukdbSubs.Subscriptions = append(tukdbSubs.Subscriptions, tukSub)
+		tukdbSub := Subscription{BrokerRef: dsubEvent.BrokerRef}
+		tukdbSubs.Subscriptions = append(tukdbSubs.Subscriptions, tukdbSub)
 		if err = tukdbSubs.NewTukDBEvent(); err == nil {
 			log.Printf("TUK Event Subscriptions Count : %v", tukdbSubs.Count)
 			if tukdbSubs.Count > 0 {
-				log.Printf("Found %s %s Subsription for Broker Ref %s", tukdbSubs.Subscriptions[1].Pathway, tukdbSubs.Subscriptions[1].Expression, tukdbSubs.Subscriptions[1].BrokerRef)
 				log.Printf("Obtaining NHS ID. Using %s", dsubEvent.XdsPid+":"+REGIONAL_OID)
 				pat := PIXPatient{}
 				if pat, err = NewPIXmConsumer(dsubEvent.XdsPid, REGIONAL_OID); err != nil {
+					log.Println(err.Error())
 					return err
 				}
-				evs := Events{Action: "insert"}
-				dsubEvent.Pathway = tukdbSubs.Subscriptions[1].Pathway
-				dsubEvent.Topic = tukdbSubs.Subscriptions[1].Topic
-				dsubEvent.NhsId = pat.NHSID
-				if len(dsubEvent.NhsId) == 10 {
-					log.Printf("Obtained NHS ID %s", dsubEvent.NhsId)
-					evs.Events = append(evs.Events, dsubEvent)
-					if err = evs.NewTukDBEvent(); err == nil {
-						log.Printf("Created TUK Event from DSUB Notification of the Publication of Document Type %s - Broker Ref - %s", dsubEvent.Expression, dsubEvent.BrokerRef)
+				if len(pat.NHSID) != 10 {
+					log.Printf("No Valid NHS ID returned in pix query for PID %s", dsubEvent.XdsPid)
+					return errors.New("no valid nhs id returned in pix query for pid " + dsubEvent.XdsPid)
+				}
+				for _, dbsub := range tukdbSubs.Subscriptions {
+					log.Printf("Found %s %s Subsription for Broker Ref %s", dbsub.Pathway, dbsub.Expression, dbsub.BrokerRef)
+					tukevs := Events{Action: "insert"}
+					dsubEvent.Pathway = dbsub.Pathway
+					dsubEvent.Topic = dbsub.Topic
+					dsubEvent.NhsId = pat.NHSID
+					tukevs.Events = append(tukevs.Events, dsubEvent)
+					if err = tukevs.NewTukDBEvent(); err == nil {
+						log.Printf("Created TUK Event for Pathway %s Expression %s Broker Ref %s", dsubEvent.Pathway, dsubEvent.Expression, dsubEvent.BrokerRef)
 						dsubEvent.UpdateWorkflow(pat)
 					}
-				} else {
-					return errors.New("unable to obtain valid nhs id")
 				}
 			} else {
-				log.Printf("No Subscription found with brokerref = %s. Sending Cancel request to Broker", dsubEvent.BrokerRef)
+				log.Printf("No Subscriptions found with brokerref = %s. Sending Cancel request to Broker", dsubEvent.BrokerRef)
 				dsubCancel := DSUBCancel{BrokerRef: dsubEvent.BrokerRef, UUID: util.NewUuid()}
 				dsubCancel.NewEvent()
 			}
@@ -1160,58 +1169,51 @@ func (i *EventMessage) NewDSUBNotifyMessage() (DSUBNotifyMessage, error) {
 	if i.Message == "" {
 		return dsubNotify, errors.New("message is empty")
 	}
+	log.Println(i.Message)
 	notifyElement := util.GetXMLNodeList(i.Message, cnst.DSUB_NOTIFY_ELEMENT)
 	if notifyElement == "" {
 		return dsubNotify, errors.New("unable to locate notify element in received message")
 	}
-	log.Println("DSUB Broker Notify Element")
-	log.Println(notifyElement)
 	if err := xml.Unmarshal([]byte(notifyElement), &dsubNotify); err != nil {
 		return dsubNotify, err
 	}
 	return dsubNotify, nil
 }
 func (i *Event) UpdateWorkflow(pat PIXPatient) {
-	log.Printf("Updating Event Service %s Workflow for patient %s %s %s", i.Pathway, pat.GivenName, pat.FamilyName, i.NhsId)
-	wfdefs := XDWS{Action: "select"}
-	wfdef := XDW{
-		Name: strings.ToUpper(i.Pathway),
-	}
-	wfdefs.XDW = append(wfdefs.XDW, wfdef)
-	if err := wfdefs.NewTukDBEvent(); err != nil {
+	log.Printf("Updating %s Workflow for patient %s %s %s", i.Pathway, pat.GivenName, pat.FamilyName, i.NhsId)
+	tukwfdefs := XDWS{Action: cnst.SELECT}
+	tukwfdef := XDW{Name: strings.ToUpper(i.Pathway)}
+	tukwfdefs.XDW = append(tukwfdefs.XDW, tukwfdef)
+	if err := tukwfdefs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return
 	}
-	if wfdefs.Count > 0 {
+	if tukwfdefs.Count == 1 {
 		log.Println("Found Workflow Definition for Pathway " + i.Pathway)
 		wfdef := WorkflowDefinition{}
-		if err := json.Unmarshal([]byte(wfdefs.XDW[1].XDW), &wfdef); err != nil {
+		if err := json.Unmarshal([]byte(tukwfdefs.XDW[1].XDW), &wfdef); err != nil {
 			log.Println(err.Error())
 			return
 		}
 		log.Println("Parsed Workflow Definition for Pathway " + wfdef.Ref)
 
 		log.Printf("Searching for exisitng workflow for %s %s", strings.ToUpper(i.Pathway), i.NhsId)
-		wfdocs := Workflows{
-			Action:    "select",
-			Workflows: []Workflow{},
-		}
-		wfdoc := Workflow{
-			XDW_Key: strings.ToUpper(i.Pathway) + i.NhsId,
-		}
-		wfdocs.Workflows = append(wfdocs.Workflows, wfdoc)
-		if err := wfdocs.NewTukDBEvent(); err != nil {
+		tukwfdocs := Workflows{Action: cnst.SELECT}
+		tukwfdoc := Workflow{XDW_Key: strings.ToUpper(i.Pathway) + i.NhsId}
+		tukwfdocs.Workflows = append(tukwfdocs.Workflows, tukwfdoc)
+		if err := tukwfdocs.NewTukDBEvent(); err != nil {
 			log.Println(err.Error())
 			return
 		}
-		if wfdocs.Count == 0 {
+		activeWorkflow := XDWWorkflowDocument{}
+		if tukwfdocs.Count == 0 {
 			log.Printf("No existing workflow state found for %s %s", strings.ToUpper(i.Pathway), i.NhsId)
-			workflowDocument := i.NewXDWContentCreator(wfdef, pat)
+			activeWorkflow := i.NewXDWContentCreator(wfdef, pat)
 			log.Println("Creating Workflow state")
 			var wfdocbytes []byte
 			var wfdefbytes []byte
 			var err error
-			if wfdocbytes, err = json.Marshal(workflowDocument); err != nil {
+			if wfdocbytes, err = json.Marshal(activeWorkflow); err != nil {
 				log.Println(err.Error())
 				return
 			}
@@ -1219,37 +1221,36 @@ func (i *Event) UpdateWorkflow(pat PIXPatient) {
 				log.Println(err.Error())
 				return
 			}
-			wfdocstr := string(wfdocbytes)
-			wfdefstr := string(wfdefbytes)
-			wfdocs = Workflows{Action: "insert"}
-			wfdoc = Workflow{
+			newwfdocs := Workflows{Action: cnst.INSERT}
+			newwfdoc := Workflow{
 				XDW_Key:   strings.ToUpper(i.Pathway) + i.NhsId,
-				XDW_UID:   workflowDocument.ID.Extension,
-				XDW_Doc:   wfdocstr,
-				XDW_Def:   wfdefstr,
+				XDW_UID:   activeWorkflow.ID.Extension,
+				XDW_Doc:   string(wfdocbytes),
+				XDW_Def:   string(wfdefbytes),
 				Version:   0,
 				Published: false,
 			}
-			wfdocs.Workflows = append(wfdocs.Workflows, wfdoc)
-			if err := wfdocs.NewTukDBEvent(); err != nil {
+			newwfdocs.Workflows = append(newwfdocs.Workflows, newwfdoc)
+			if err := newwfdocs.NewTukDBEvent(); err != nil {
 				log.Println(err.Error())
 				return
 			}
-			log.Println("Persisted Workflow state")
+			log.Println("Created new Workflow Document")
 		} else {
-			activeWorkflow := XDWWorkflowDocument{}
-			log.Printf("Existing Workflow state found for Pathway %s NHS ID %s", i.Pathway, i.NhsId)
-			if err := json.Unmarshal([]byte(wfdocs.Workflows[1].XDW_Doc), &activeWorkflow); err != nil {
+			log.Printf("Existing Workflow document found for Pathway %s NHS ID %s", i.Pathway, i.NhsId)
+			if err := json.Unmarshal([]byte(tukwfdocs.Workflows[1].XDW_Doc), &activeWorkflow); err != nil {
 				log.Println(err.Error())
 			}
-			log.Printf("Updating %s Workflow for NHS ID %s with latest events", i.Pathway, i.NhsId)
-			//i.updateActiveWorkflow()
 		}
-
+		NewXDWContentUpdator(activeWorkflow, pat)
 	} else {
-		log.Printf("Warning. No Event service XDW Definition found for pathway %s", i.Pathway)
+		log.Printf("Warning. No XDW Definition found for pathway %s", i.Pathway)
 
 	}
+}
+func NewXDWContentUpdator(wf XDWWorkflowDocument, pat PIXPatient) {
+	log.Printf("Updating %s Workflow for NHS ID %s with latest events", wf.WorkflowDefinitionReference, pat.NHSID)
+
 }
 
 // func (i *Event) updateActiveWorkflow() error {
