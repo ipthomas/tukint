@@ -72,20 +72,6 @@ type Dashboard struct {
 	Closed     int
 	ServerURL  string
 }
-type TmpltWorkflow struct {
-	Created   string
-	NHS       string
-	Pathway   string
-	XDWKey    string
-	Published bool
-	Version   int
-	XDW       XDWWorkflowDocument
-}
-type TmpltWorkflows struct {
-	Count     int
-	ServerURL string
-	Workflows []TmpltWorkflow
-}
 type WorkflowState struct {
 	Events    Events    `json:"events"`
 	XDWS      TUKXDWS   `json:"xdws"`
@@ -877,6 +863,12 @@ func InitXDWWorkflowDocument(wf Workflow) (XDWWorkflowDocument, error) {
 	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwStruc)
 	return xdwStruc, err
 }
+func InitXDWDefinition(wf Workflow) (WorkflowDefinition, error) {
+	var err error
+	xdwdef := WorkflowDefinition{}
+	err = json.Unmarshal([]byte(wf.XDW_Doc), &xdwdef)
+	return xdwdef, err
+}
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
 	req := ClientRequest{ServerURL: GetServerURL()}
 	if err := req.InitClientRequest(r); err == nil {
@@ -915,7 +907,7 @@ func (i *ClientRequest) InitClientRequest(req *http.Request) error {
 func (req *ClientRequest) ProcessClientRequest() string {
 	log.Printf("Processing %s Request", req.Act)
 	switch req.Act {
-	case "dashboard":
+	case cnst.DASHBOARD:
 		return req.NewDashboardRequest()
 	case cnst.WORKFLOWS:
 		return req.NewWorkflowsRequest()
@@ -966,20 +958,41 @@ func (i *ClientRequest) NewTaskRequest() string {
 	return b.String()
 }
 func (i *ClientRequest) NewWorkflowsRequest() string {
-	tmpltwfs := TmpltWorkflows{ServerURL: GetServerURL()}
-	wfs := Workflows{Action: cnst.SELECT}
-	wf := Workflow{}
+	type TmpltWorkflow struct {
+		Created   string
+		NHS       string
+		Pathway   string
+		XDWKey    string
+		Published bool
+		Version   int
+		XDW       XDWWorkflowDocument
+		XDWDef    WorkflowDefinition
+		Patient   PIXPatient
+	}
+	type TmpltWorkflows struct {
+		Count     int
+		ServerURL string
+		Workflows []TmpltWorkflow
+	}
+	tmpltwfs := TmpltWorkflows{ServerURL: i.ServerURL}
 
-	wfs.Workflows = append(wfs.Workflows, wf)
-	if err := wfs.NewTukDBEvent(); err != nil {
+	tukwfs := Workflows{Action: cnst.SELECT}
+	if err := tukwfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return err.Error()
 	}
-	log.Printf("Processing %v workflows", wfs.Count)
-	for _, wf := range wfs.Workflows {
-
+	log.Printf("Processing %v workflows", tukwfs.Count)
+	for _, wf := range tukwfs.Workflows {
 		if wf.Id > 0 {
 			xdw, err := InitXDWWorkflowDocument(wf)
+			if err != nil {
+				continue
+			}
+			xdwdef, err := InitXDWDefinition(wf)
+			if err != nil {
+				continue
+			}
+			pat, err := NewPIXmConsumer(xdw.Patient.ID.Extension, NHS_OID)
 			if err != nil {
 				continue
 			}
@@ -993,6 +1006,8 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 					tmpltworkflow.XDWKey = wf.XDW_Key
 					tmpltworkflow.Pathway, tmpltworkflow.NHS = util.SplitXDWKey(tmpltworkflow.XDWKey)
 					tmpltworkflow.XDW = xdw
+					tmpltworkflow.XDWDef = xdwdef
+					tmpltworkflow.Patient = pat
 					tmpltwfs.Workflows = append(tmpltwfs.Workflows, tmpltworkflow)
 					tmpltwfs.Count = tmpltwfs.Count + 1
 					log.Printf("Including Workflow %s - Status %s", wf.XDW_Key, xdw.WorkflowStatus)
@@ -1004,6 +1019,8 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 				tmpltworkflow.XDWKey = wf.XDW_Key
 				tmpltworkflow.Pathway, tmpltworkflow.NHS = util.SplitXDWKey(tmpltworkflow.XDWKey)
 				tmpltworkflow.XDW = xdw
+				tmpltworkflow.XDWDef = xdwdef
+				tmpltworkflow.Patient = pat
 				tmpltwfs.Workflows = append(tmpltwfs.Workflows, tmpltworkflow)
 				tmpltwfs.Count = tmpltwfs.Count + 1
 				log.Printf("Including Workflow %s - Status %s", wf.XDW_Key, xdw.WorkflowStatus)
