@@ -109,7 +109,7 @@ func Tuk_Time() string {
 
 // PrettyTime strips everything after the `.` from the input time string
 func PrettyTime(time string) string {
-	return strings.Split(time, ".")[0]
+	return strings.TrimSuffix(strings.ReplaceAll(strings.Split(time, ".")[0], "T", " "), "Z")
 }
 
 // TUK_Hour returns the current hour as a 2 digit string

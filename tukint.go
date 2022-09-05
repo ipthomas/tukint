@@ -69,6 +69,7 @@ type Dashboard struct {
 	Ready      int
 	Open       int
 	InProgress int
+	Complete   int
 	Closed     int
 	ServerURL  string
 }
@@ -1117,18 +1118,18 @@ func (i *ClientRequest) NewDashboardRequest() string {
 			continue
 		}
 		json.Unmarshal([]byte(wf.XDW_Doc), &xdw)
-		if wf.Version == 0 {
-			log.Printf("Workflow Created on %s for Patient NHS ID %s Workflow Status %s", xdw.EffectiveTime.Value, xdw.Patient.ID.Extension, xdw.WorkflowStatus)
-			switch xdw.WorkflowStatus {
-			case "READY":
-				dashboard.Ready = dashboard.Ready + 1
-			case "OPEN":
-				dashboard.Open = dashboard.Open + 1
-			case "IN_PROGRESS":
-				dashboard.InProgress = dashboard.InProgress + 1
-			case "COMPLETE":
-				dashboard.Closed = dashboard.Closed + 1
-			}
+		log.Printf("Workflow Created on %s for Patient NHS ID %s Workflow Status %s Workflow Version %v", xdw.EffectiveTime.Value, xdw.Patient.ID.Extension, xdw.WorkflowStatus, wf.Version)
+		switch xdw.WorkflowStatus {
+		case "READY":
+			dashboard.Ready = dashboard.Ready + 1
+		case "OPEN":
+			dashboard.Open = dashboard.Open + 1
+		case "IN_PROGRESS":
+			dashboard.InProgress = dashboard.InProgress + 1
+		case "COMPLETE":
+			dashboard.Complete = dashboard.Complete + 1
+		case "CLOSED":
+			dashboard.Closed = dashboard.Closed + 1
 		}
 	}
 
@@ -1622,6 +1623,9 @@ func RegisterXDWDefinitions() (Subscriptions, error) {
 								var xdwdefBytes = make(map[string][]byte)
 								xdwdefBytes[xdwdef.Ref] = xdwbytes
 								PersistXDWDefinitions(xdwdefBytes)
+								if err := os.Rename(config_Folder+"/"+file.Name(), config_Folder+"/"+file.Name()+".deployed"); err != nil {
+									log.Println(err.Error())
+								}
 							}
 						}
 					}
@@ -1758,7 +1762,7 @@ func NewWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte
 	var xdwdef = WorkflowDefinition{}
 	var xdwdefBytes []byte
 	var xdwfile *os.File
-	var input = config_Folder + file.Name()
+	var input = config_Folder + "/" + file.Name()
 	if xdwfile, err = os.Open(input); err == nil {
 		json.NewDecoder(xdwfile).Decode(&xdwdef)
 		if xdwdefBytes, err = json.MarshalIndent(xdwdef, "", "  "); err == nil {
@@ -1895,17 +1899,19 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 		for k, exwf := range existingwfs.Workflows {
 			if k > 0 {
 				if exwf.XDW_Key == workflowdef.Ref+workflow.Patient.ID.Extension {
+					wfStr := UpdateWorkflowStatus(exwf.XDW_Doc, "CLOSED")
 					updtwfs := Workflows{Action: cnst.UPDATE}
 					updtwf := Workflow{
 						XDW_Key: exwf.XDW_Key,
 						Version: exwf.Version,
+						XDW_Doc: wfStr,
 					}
 					updtwfs.Workflows = append(updtwfs.Workflows, updtwf)
 					if err := updtwfs.NewTukDBEvent(); err != nil {
 						log.Println(err.Error())
 						return err
 					}
-					log.Println("Deprecated existing workflow")
+					log.Println("Closed existing workflow")
 				}
 			}
 		}
@@ -1916,6 +1922,20 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 		log.Println(err.Error())
 	}
 	return err
+}
+func UpdateWorkflowStatus(wfstr string, status string) string {
+	wf := XDWWorkflowDocument{}
+	if err := json.Unmarshal([]byte(wfstr), &wf); err != nil {
+		log.Println(err.Error())
+		return wfstr
+	}
+	wf.WorkflowStatus = status
+	ret, err := json.Marshal(wf)
+	if err != nil {
+		log.Println(err.Error())
+		return wfstr
+	}
+	return string(ret)
 }
 func GetWorkflowEvents(pathway string, nhs string) (Events, error) {
 	evs := Events{Action: cnst.SELECT}
