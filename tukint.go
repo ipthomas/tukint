@@ -915,8 +915,23 @@ func (req *ClientRequest) ProcessClientRequest() string {
 		return req.NewWorkflowRequest()
 	case cnst.TASK:
 		return req.NewTaskRequest()
+	case cnst.PATIENT:
+		return req.NewPatientRequest()
 	}
 	return "Nothing to process"
+}
+func (i *ClientRequest) NewPatientRequest() string {
+	pat, err := NewPIXmConsumer(i.NHS, NHS_OID)
+	if err != nil {
+		log.Println(err.Error())
+		return err.Error()
+	}
+	var b bytes.Buffer
+	err = htmlTemplates.ExecuteTemplate(&b, "pixpatient", pat)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return b.String()
 }
 func (i *ClientRequest) NewTaskRequest() string {
 	if i.ID < 1 || i.Pathway == "" || i.NHS == "" {
