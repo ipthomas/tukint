@@ -765,6 +765,19 @@ func InitLambdaVars() {
 		log.Println("AWS NHS_OID environment variable is empty")
 	}
 }
+func NewHTTPServer(basefolder string, logfolder string, configfolder string, templatefolder string, codesystemfile string, baseresourceurl string, port string) {
+	srv := TukHttpServer{
+		BaseFolder:      basefolder,
+		ConfigFolder:    configfolder,
+		TemplateFolder:  templatefolder,
+		LogFolder:       logfolder,
+		LogToFile:       logfolder != "",
+		CodeSystemFile:  codesystemfile,
+		BaseResourceUrl: baseresourceurl,
+		Port:            port,
+	}
+	srv.NewHTTPServer()
+}
 func (i *TukHttpServer) NewHTTPServer() {
 	if i.BaseFolder != "" {
 		SetBaseFolder(i.BaseFolder)
