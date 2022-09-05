@@ -2196,9 +2196,11 @@ func (i *PIXmQuery) InitPIXPatient() error {
 
 			if len(rsppat.Resource.Address) > 0 {
 				tukpat.Zip = rsppat.Resource.Address[0].PostalCode
-				tukpat.Street = rsppat.Resource.Address[0].Line[0]
-				if len(rsppat.Resource.Address[0].Line) > 1 {
-					tukpat.Town = rsppat.Resource.Address[0].Line[1]
+				if len(rsppat.Resource.Address[0].Line) > 0 {
+					tukpat.Street = rsppat.Resource.Address[0].Line[0]
+					if len(rsppat.Resource.Address[0].Line) > 1 {
+						tukpat.Town = rsppat.Resource.Address[0].Line[1]
+					}
 				}
 				tukpat.City = rsppat.Resource.Address[0].City
 				tukpat.Country = rsppat.Resource.Address[0].Country
