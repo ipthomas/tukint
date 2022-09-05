@@ -934,21 +934,21 @@ func (i *ClientRequest) NewPatientRequest() string {
 	return b.String()
 }
 func (i *ClientRequest) NewTaskRequest() string {
-	if i.ID < 1 || i.Pathway == "" || i.NHS == "" {
-		return "Invalid request. Task ID, Pathway and NHS ID are required"
+	if i.ID < 1 || i.Pathway == "" {
+		return "Invalid request. Task ID and Pathway required"
 	}
 	wfdoc := XDWWorkflowDocument{}
 	wfdef := WorkflowDefinition{}
 
 	wfs := Workflows{Action: cnst.SELECT}
-	wf := Workflow{XDW_Key: i.Pathway + i.NHS, Version: i.Version}
+	wf := Workflow{XDW_Key: i.Pathway, Version: i.Version}
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err := wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return err.Error()
 	}
 	if wfs.Count != 1 {
-		return "No Workflow found for " + i.Pathway + i.NHS + " version " + util.GetStringFromInt(i.Version)
+		return "No Workflow found for " + i.Pathway + " version " + util.GetStringFromInt(i.Version)
 	}
 	if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &wfdoc); err != nil {
 		log.Println(err.Error())
