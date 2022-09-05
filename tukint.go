@@ -926,14 +926,14 @@ func (i *ClientRequest) NewTaskRequest() string {
 	wfdef := WorkflowDefinition{}
 
 	wfs := Workflows{Action: cnst.SELECT}
-	wf := Workflow{XDW_Key: i.XDWKey, Version: i.Version}
+	wf := Workflow{XDW_Key: i.Pathway + i.NHS, Version: i.Version}
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err := wfs.NewTukDBEvent(); err != nil {
 		log.Println(err.Error())
 		return err.Error()
 	}
 	if wfs.Count != 1 {
-		return "No Workflow found for xdwkey = " + i.XDWKey
+		return "No Workflow found for " + i.Pathway + i.NHS + " version " + util.GetStringFromInt(i.Version)
 	}
 	if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &wfdoc); err != nil {
 		log.Println(err.Error())
@@ -1573,7 +1573,7 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 //		tukint.SetDSUBBrokerURL("http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub")
 //		tukint.SetDSUBConsumerURL("https://cjrvrddgdh.execute-api.eu-west-1.amazonaws.com/beta/")
 //
-//	If you want the log to output to a file rather than the terminal/console call tukint.InitLog() before calling RegisterXDWDefinitions() and tukint.CloseLog() before exiting
+//	If you want the log output sent to a file rather than the terminal/console call tukint.InitLog() before calling RegisterXDWDefinitions() and tukint.CloseLog() before exiting
 func RegisterXDWDefinitions() (Subscriptions, error) {
 	var folderfiles []fs.DirEntry
 	var file fs.DirEntry
@@ -1889,10 +1889,12 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	}
 	return err
 }
-func GetWorkflowEvents(pathway string, nhs string) {
+func GetWorkflowEvents(pathway string, nhs string) (Events, error) {
 	evs := Events{Action: cnst.SELECT}
 	ev := Event{NhsId: nhs, Pathway: pathway, Version: "0"}
 	evs.Events = append(evs.Events, ev)
+	err := evs.NewTukDBEvent()
+	return evs, err
 }
 func (i *WorkflowDefinition) Log() {
 	b, _ := json.MarshalIndent(i, "", "  ")
