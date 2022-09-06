@@ -6,13 +6,15 @@
 package tukcnst
 
 const (
+	OPEN                            = "OPEN"
+	READY                           = "READY"
+	CLOSED                          = "CLOSED"
 	TASK                            = "task"
 	NO_VALUE                        = "Not Provided"
 	TUK_DB_TABLE_SUBSCRIPTIONS      = "subscriptions"
 	TUK_DB_TABLE_XDWS               = "xdws"
 	APPLICATION_JSON_CHARSET_UTF_8  = APPLICATION_JSON + "; charset=utf-8"
 	XDW_DEFINITION_FILE             = "_xdwdef"
-	SPA                             = "spa"
 	DASHBOARD                       = "dashboard"
 	TIMELINE                        = "timeline"
 	QUERY_PARAM_ACTION              = "action"
