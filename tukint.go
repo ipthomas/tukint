@@ -604,7 +604,12 @@ func (req *ClientRequest) ProcessClientRequest() string {
 	return "Nothing to process"
 }
 func (i *ClientRequest) NewPatientRequest() string {
-	pdq := pixm.PIXmQuery{PID: i.NHS}
+	pdq := pixm.PDQQuery{
+		Server:     cnst.PIXm,
+		Server_URL: PIX_MANAGER_URL,
+		NHS_ID:     i.NHS,
+		REG_OID:    REGIONAL_OID,
+	}
 	if err := pixm.PDQ(&pdq); err != nil {
 		return err.Error()
 	}
@@ -694,7 +699,12 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 				continue
 			}
 			log.Printf("Initialised Workflow definition for Workflow document %s", xdwdef.Ref)
-			pdq := pixm.PIXmQuery{PID: xdw.Patient.ID.Extension}
+			pdq := pixm.PDQQuery{
+				Server:     cnst.PIXm,
+				Server_URL: PIX_MANAGER_URL,
+				NHS_ID:     i.NHS,
+				REG_OID:    REGIONAL_OID,
+			}
 			if err := pixm.PDQ(&pdq); err != nil {
 				log.Println(err.Error())
 				continue
