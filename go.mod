@@ -3,12 +3,12 @@ module github.com/ipthomas/tukint
 go 1.19
 
 require (
-	github.com/ipthomas/tukcnst v1.0.3
-	github.com/ipthomas/tukdbint v0.0.0-20220912165441-91e08c5e3e17
-	github.com/ipthomas/tukdsub v0.0.0-20220912192829-5c409bade33b
-	github.com/ipthomas/tukhttp v0.0.0-20220912112750-4e1d4d870e93
-	github.com/ipthomas/tukpixm v0.0.0-20220912152010-d85d0e288617
-	github.com/ipthomas/tukutil v0.0.0-20220912190241-6f399bf71d4b
+	github.com/ipthomas/tukcnst v1.0.5
+	github.com/ipthomas/tukdbint v0.0.0-20220912193842-dabe6708e17f
+	github.com/ipthomas/tukdsub v0.0.0-20220912200745-d6fe8de26ddd
+	github.com/ipthomas/tukhttp v1.0.5
+	github.com/ipthomas/tukpixm v1.0.5
+	github.com/ipthomas/tukutil v1.0.5
 )
 
 require (
