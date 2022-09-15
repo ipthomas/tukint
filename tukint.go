@@ -1211,7 +1211,7 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 	return xdwdoc
 }
 
-// RegisterXDWDefinitions loads and parses xdw definition files (with suffix `_xdwdef.json“) in the config folder.
+// RegisterXDWDefinitions loads and parses xdw definition files (with suffix `_xdwdef.json“) in the config_folder. If input param folder == "", the value that is set in the global var config_folder is used.
 // Any exisitng xdw definition for the workflow is deleted along with any tuk event subscriptions associated with the workflow
 // DSUB Broker Subscriptions are then created for the workflow tasks.
 // For each successful broker subcription, a Tuk Event subscription with the broker ref, workflow, topic and expression is created
@@ -1226,11 +1226,14 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 //		tukint.SetDSUBConsumerURL("https://cjrvrddgdh.execute-api.eu-west-1.amazonaws.com/beta/")
 //
 //	If you want the log output sent to a file rather than the terminal/console call tukint.InitLog() before calling RegisterXDWDefinitions() and tukint.CloseLog() before exiting
-func RegisterXDWDefinitions() (dbint.Subscriptions, error) {
+func RegisterXDWDefinitions(folder string) (dbint.Subscriptions, error) {
 	var folderfiles []fs.DirEntry
 	var file fs.DirEntry
 	var err error
 	var rspSubs = dbint.Subscriptions{Action: cnst.INSERT}
+	if folder != "" {
+		config_Folder = folder
+	}
 	if folderfiles, err = util.GetFolderFiles(config_Folder); err == nil {
 		for _, file = range folderfiles {
 			if strings.HasSuffix(file.Name(), ".json") && strings.Contains(file.Name(), cnst.XDW_DEFINITION_FILE) {
@@ -1397,7 +1400,6 @@ func NewWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte
 	}
 	return xdwdef, xdwdefBytes, err
 }
-
 func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowDefinition) error {
 	var err error
 	var wfDoc []byte
@@ -1463,7 +1465,6 @@ func UpdateWorkflowStatus(wfstr string, status string) string {
 	}
 	return string(ret)
 }
-
 func GetActiveWorkflowEvents(pathway string, nhs string) (dbint.Events, error) {
 	evs := dbint.Events{Action: cnst.SELECT}
 	ev := dbint.Event{NhsId: nhs, Pathway: pathway, Version: "0"}
@@ -1474,7 +1475,6 @@ func GetActiveWorkflowEvents(pathway string, nhs string) (dbint.Events, error) {
 func Log(i interface{}) {
 	util.Log(i)
 }
-
 func AWS_XDWs_API_Request(i *dbint.XDWS) error {
 	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+cnst.XDWS)
 	body, _ := json.Marshal(i)
@@ -1511,7 +1511,6 @@ func AWS_Events_API_Request(i *dbint.Events) error {
 	}
 	return err
 }
-
 func newAWS_APIRequest(act string, resource string, body []byte) ([]byte, error) {
 	awsreq := tukhttp.AWS_APIRequest{
 		URL:      TUK_DB_URL,
