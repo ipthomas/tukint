@@ -19,7 +19,7 @@ import (
 	dbint "github.com/ipthomas/tukdbint"
 	dsub "github.com/ipthomas/tukdsub"
 	"github.com/ipthomas/tukhttp"
-	pixm "github.com/ipthomas/tukpixm"
+	pdq "github.com/ipthomas/tukpdq"
 	util "github.com/ipthomas/tukutil"
 )
 
@@ -604,17 +604,17 @@ func (req *ClientRequest) ProcessClientRequest() string {
 	return "Nothing to process"
 }
 func (i *ClientRequest) NewPatientRequest() string {
-	pdq := pixm.PDQQuery{
+	tukpdq := pdq.PDQQuery{
 		Server:     cnst.PIXm,
 		Server_URL: PIX_MANAGER_URL,
 		NHS_ID:     i.NHS,
 		REG_OID:    REGIONAL_OID,
 	}
-	if err := pixm.PDQ(&pdq); err != nil {
+	if err := pdq.PDQ(&tukpdq); err != nil {
 		return err.Error()
 	}
 	var b bytes.Buffer
-	if err := htmlTemplates.ExecuteTemplate(&b, "pixpatient", pdq.Response[0]); err != nil {
+	if err := htmlTemplates.ExecuteTemplate(&b, "pixpatient", tukpdq.Response); err != nil {
 		log.Println(err.Error())
 	}
 	return b.String()
@@ -668,7 +668,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 		Version   int
 		XDW       XDWWorkflowDocument
 		XDWDef    WorkflowDefinition
-		Patient   pixm.PIXPatient
+		Patient   pdq.PIXPatient
 	}
 	type TmpltWorkflows struct {
 		Count     int
@@ -685,7 +685,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	log.Printf("Processing %v workflows", tukwfs.Count)
 	for _, wf := range tukwfs.Workflows {
 		if wf.Id > 0 {
-			pat := pixm.PIXPatient{}
+			pat := pdq.PIXPatient{}
 			log.Printf("Initialising workflow document - id %v", wf.Id)
 			xdw, err := InitXDWWorkflowDocument(wf)
 			if err != nil {
@@ -699,13 +699,13 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 				continue
 			}
 			log.Printf("Initialised Workflow definition for Workflow document %s", xdwdef.Ref)
-			pdq := pixm.PDQQuery{
+			tukpdq := pdq.PDQQuery{
 				Server:     cnst.PIXm,
 				Server_URL: PIX_MANAGER_URL,
 				NHS_ID:     i.NHS,
 				REG_OID:    REGIONAL_OID,
 			}
-			if err := pixm.PDQ(&pdq); err != nil {
+			if err := pdq.PDQ(&tukpdq); err != nil {
 				log.Println(err.Error())
 				continue
 			}
@@ -824,10 +824,10 @@ func (i *ClientRequest) NewDashboardRequest() string {
 }
 func (i *EventMessage) NewDSUBBrokerEvent() error {
 	InitLambdaVars()
-	dsub := dsub.DSUBEvent{Message: i.Message}
-	return dsub.NewEvent()
+	dsubEvent := dsub.DSUBEvent{Message: i.Message}
+	return dsub.NewDsubEvent(&dsubEvent)
 }
-func UpdateWorkflow(i *dbint.Event, pat pixm.PIXPatient) {
+func UpdateWorkflow(i *dbint.Event, pat pdq.PIXPatient) {
 	log.Printf("Updating %s Workflow for patient %s %s %s", i.Pathway, pat.GivenName, pat.FamilyName, i.NhsId)
 	tukwfdefs := dbint.XDWS{Action: cnst.SELECT}
 	tukwfdef := dbint.XDW{Name: i.Pathway}
@@ -871,7 +871,7 @@ func UpdateWorkflow(i *dbint.Event, pat pixm.PIXPatient) {
 	}
 }
 
-func NewXDWContentUpdator(i *dbint.Event, wfdef WorkflowDefinition, wf XDWWorkflowDocument, pat pixm.PIXPatient) {
+func NewXDWContentUpdator(i *dbint.Event, wfdef WorkflowDefinition, wf XDWWorkflowDocument, pat pdq.PIXPatient) {
 	log.Printf("Updating %s Workflow for NHS ID %s with latest events", wf.WorkflowDefinitionReference, pat.NHSID)
 	if wf.WorkflowStatus == cnst.COMPLETE || wf.WorkflowStatus == "CLOSED" {
 		log.Printf("Workflow state is %s.", wf.WorkflowStatus)
@@ -1120,7 +1120,7 @@ func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
 }
 
 // NewXDWContentCreator takes input string for author details, a workflo definition and patient struct. It returns a new XDW compliant Document
-func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, authorOID string, xdwdef WorkflowDefinition, pat pixm.PIXPatient) XDWWorkflowDocument {
+func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, authorOID string, xdwdef WorkflowDefinition, pat pdq.PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s XDW Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
 	xdwdoc := XDWWorkflowDocument{}
 	var authorname = author
