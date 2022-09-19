@@ -7,8 +7,7 @@ require (
 	github.com/ipthomas/tukdbint v1.0.11
 	github.com/ipthomas/tukdsub v1.0.13
 	github.com/ipthomas/tukhttp v1.1.1
-	github.com/ipthomas/tukpdq v1.1.6
-	github.com/ipthomas/tukpixm v1.1.0
+	github.com/ipthomas/tukpdq v1.1.7
 	github.com/ipthomas/tukutil v1.1.1
 )
 
