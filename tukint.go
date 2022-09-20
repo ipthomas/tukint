@@ -15,12 +15,14 @@ import (
 	"strings"
 	"time"
 
-	cnst "github.com/ipthomas/tukcnst"
+	"github.com/ipthomas/tukcnst"
 	dbint "github.com/ipthomas/tukdbint"
 	dsub "github.com/ipthomas/tukdsub"
 	"github.com/ipthomas/tukhttp"
-	pdq "github.com/ipthomas/tukpdq"
+	"github.com/ipthomas/tukpdq"
 	util "github.com/ipthomas/tukutil"
+
+	"github.com/aws/aws-lambda-go/events"
 )
 
 type TUKServiceState struct {
@@ -246,10 +248,13 @@ type ClientRequest struct {
 	Org          string `json:"org"`
 	Orgoid       string `json:"orgoid"`
 	Role         string `json:"role"`
-	NHS          string `json:"nhs"`
-	PID          string `json:"pid"`
-	PIDOrg       string `json:"pidorg"`
-	PIDOID       string `json:"pidoid"`
+	NHS_ID       string `json:"nhsid"`
+	NHS_OID      string `json:"nhsoid"`
+	MRN_ID       string `json:"mrnid"`
+	MRN_OID      string `json:"mrnoid"`
+	MRN_Org      string `json:"mrnorg"`
+	REG_ID       string `json:"regid"`
+	REG_OID      string `json:"regoid"`
 	FamilyName   string `json:"familyname"`
 	GivenName    string `json:"givenname"`
 	DOB          string `json:"dob"`
@@ -264,9 +269,11 @@ type ClientRequest struct {
 	ReturnFormat string `json:"returnformat"`
 }
 type EventMessage struct {
-	Source  string
-	Message string
+	Source   string
+	Message  string
+	Response string
 }
+
 type TukHttpServer struct {
 	BaseFolder      string
 	ConfigFolder    string
@@ -287,190 +294,126 @@ type TukAuthor struct {
 type TukAuthors struct {
 	Author []TukAuthor `json:"authors"`
 }
+type TukHttpServerState struct {
+	Http_Scheme     string
+	Hostname        string
+	Port            string
+	BaseResourceUrl string
+}
+type TukState struct {
+	TUK_DB_URL         string
+	DSUB_Consumer_URL  string
+	DSUB_Broker_URL    string
+	PIXm_Server_URL    string
+	PIXv3_Server_URL   string
+	PDQv3_Server_URL   string
+	PDQ_Server_URL     string
+	PDQ_Server_Default string
+	Reg_OID            string
+	NHS_OID            string
+	BaseFolder         string
+	LogFolder          string
+	ConfigFolder       string
+	TemplateFolder     string
+	CodeSystem_File    string
+	HTTPServerState    TukHttpServerState
+}
 
 var (
+	State                              = TukState{}
+	HtmlTemplates                      *template.Template
+	XmlTemplates                       *template.Template
+	LogFile                            *os.File
 	HOME_COMMUNITY_ID                  = "1.2.3.4.5"
-	is_Secure                          = false
-	http_Scheme                        = "http://"
-	hostname                           = ""
-	port                               = ":8080"
-	baseResourceUrl                    = "/eventservice"
-	htmlTemplates                      *template.Template
-	xmlTemplates                       *template.Template
-	logFile                            *os.File
-	base_Folder                        = ""
-	log_Folder                         = base_Folder + "/logs"
-	config_Folder                      = base_Folder + "/configs"
-	templates_Folder                   = config_Folder + "/templates"
-	codeSystem_File                    = config_Folder + "/codesystem.json"
-	TUK_DB_URL                         = "https://5k2o64mwt5.execute-api.eu-west-1.amazonaws.com/beta/"
-	DSUB_BROKER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritXDSDsub/Dsub"
-	DSUB_CONSUMER_URL                  = "https://cjrvrddgdh.execute-api.eu-west-1.amazonaws.com/beta/"
-	PIX_MANAGER_URL                    = "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient"
-	REGIONAL_OID                       = "2.16.840.1.113883.2.1.3.31.2.1.1"
-	NHS_OID                            = "2.16.840.1.113883.2.1.4.1"
-	DSUB_ACK_TEMPLATE                  = "<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'><SOAP-ENV:Body/></SOAP-ENV:Envelope>"
-	DSUB_SUBSCRIBE_TEMPLATE            = "{{define \"subscribe\"}}<SOAP-ENV:Envelope xmlns:SOAP-ENV='http://www.w3.org/2003/05/soap-envelope' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns:s='http://www.w3.org/2001/XMLSchema' xmlns:wsa='http://www.w3.org/2005/08/addressing'><SOAP-ENV:Header><wsa:Action SOAP-ENV:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/NotificationProducer/SubscribeRequest</wsa:Action><wsa:MessageID>urn:uuid:{{newuuid}}</wsa:MessageID><wsa:ReplyTo SOAP-ENV:mustUnderstand='true'><wsa:Address>http://www.w3.org/2005/08/addressing/anonymous</wsa:Address></wsa:ReplyTo><wsa:To>{{.BrokerUrl}}</wsa:To></SOAP-ENV:Header><SOAP-ENV:Body><wsnt:Subscribe xmlns:wsnt='http://docs.oasis-open.org/wsn/b-2' xmlns:a='http://www.w3.org/2005/08/addressing' xmlns:rim='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:wsa='http://www.w3.org/2005/08/addressing'><wsnt:ConsumerReference><wsa:Address>{{.ConsumerUrl}}</wsa:Address></wsnt:ConsumerReference><wsnt:Filter><wsnt:TopicExpression Dialect='http://docs.oasis-open.org/wsn/t-1/TopicExpression/Simple'>ihe:FullDocumentEntry</wsnt:TopicExpression><rim:AdhocQuery id='urn:uuid:742790e0-aba6-43d6-9f1f-e43ed9790b79'><rim:Slot name='{{.Topic}}'><rim:ValueList><rim:Value>('{{.Expression}}')</rim:Value></rim:ValueList></rim:Slot></rim:AdhocQuery></wsnt:Filter></wsnt:Subscribe></SOAP-ENV:Body></SOAP-ENV:Envelope>{{end}}"
-	DSUB_CANCEL_TEMPLATE               = "{{define \"cancel\"}}<soap:Envelope xmlns:soap='http://www.w3.org/2003/05/soap-envelope'><soap:Header><Action xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeRequest</Action><MessageID xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>urn:uuid:{{.UUID}}</MessageID><To xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'>{{.BrokerRef}}</To><ReplyTo xmlns='http://www.w3.org/2005/08/addressing' soap:mustUnderstand='true'><Address>http://www.w3.org/2005/08/addressing/anonymous</Address></ReplyTo></soap:Header><soap:Body><Unsubscribe xmlns='http://docs.oasis-open.org/wsn/b-2' xmlns:ns2='http://www.w3.org/2005/08/addressing' xmlns:ns3='http://docs.oasis-open.org/wsrf/bf-2' xmlns:ns4='urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0' xmlns:ns5='urn:oasis:names:tc:ebxml-regrep:xsd:rs:3.0' xmlns:ns6='urn:oasis:names:tc:ebxml-regrep:xsd:lcm:3.0' xmlns:ns7='http://docs.oasis-open.org/wsn/t-1' xmlns:ns8='http://docs.oasis-open.org/wsrf/r-2'/></soap:Body></soap:Envelope>{{end}}"
-	SOAP_XML_Content_Type_EventHeaders = map[string]string{cnst.CONTENT_TYPE: cnst.SOAP_XML}
+	SOAP_XML_Content_Type_EventHeaders = map[string]string{tukcnst.CONTENT_TYPE: tukcnst.SOAP_XML}
 )
 
+func SetState(tukstate TukState) {
+	State = tukstate
+}
+func Init_TukHTTPServerState(basefolder string) {
+	hn, _ := os.Hostname()
+	tuksrv := TukHttpServerState{}
+	tuksrv.Http_Scheme = tukcnst.TUK_HTTP_SERVER_SCHEME
+	tuksrv.Hostname = hn
+	tuksrv.Port = tukcnst.TUK_HTTP_SERVER_DEFAULT_PORT
+	tuksrv.BaseResourceUrl = "/eventservice"
+	State.HTTPServerState = tuksrv
+}
+func New_PDQEvent(req events.APIGatewayProxyRequest) error {
+	if os.Getenv(tukcnst.NHS_OID) != "" {
+		State.NHS_OID = os.Getenv(tukcnst.NHS_OID)
+	}
+	if req.QueryStringParameters["nhsoid"] != "" {
+		State.NHS_OID = req.QueryStringParameters["nhsoid"]
+	}
+	if os.Getenv("PDQ_SERVER_DEFAULT") != "" {
+		State.PDQ_Server_Default = strings.ToLower(strings.TrimPrefix(os.Getenv("PDQ_SERVER_DEFAULT"), "SERVER_"))
+	}
+	if req.QueryStringParameters["server"] != "" {
+		State.PDQ_Server_Default = strings.ToLower(req.QueryStringParameters["server"])
+	}
+	switch State.PDQ_Server_Default {
+	case tukcnst.PIXm:
+		State.PDQ_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PIXM)
+	case tukcnst.PDQv3:
+		State.PDQ_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PDQV3)
+	case tukcnst.PIXv3:
+		State.PDQ_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PIXV3)
+	}
+	pdq := tukpdq.PDQQuery{
+		Server:     State.PDQ_Server_Default,
+		MRN_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_ID],
+		MRN_OID:    req.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_OID],
+		NHS_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_ID],
+		NHS_OID:    State.NHS_OID,
+		REG_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_REG_ID],
+		REG_OID:    os.Getenv(tukcnst.QUERY_PARAM_MRN_OID),
+		Server_URL: State.PDQ_Server_URL,
+	}
+	if pdq.MRN_ID != "" && pdq.MRN_OID != "" {
+		pdq.Used_PID = pdq.MRN_ID
+		pdq.Used_PID_OID = pdq.MRN_OID
+	} else {
+		if pdq.NHS_ID != "" {
+			pdq.Used_PID = pdq.NHS_ID
+			pdq.Used_PID_OID = pdq.NHS_ID
+		} else {
+			if pdq.REG_ID != "" && pdq.REG_OID != "" {
+				pdq.Used_PID = pdq.REG_ID
+				pdq.Used_PID_OID = pdq.REG_OID
+			}
+		}
+	}
+	return nil
+}
 func Set_Home_Community(homeCommunityId string) {
 	HOME_COMMUNITY_ID = homeCommunityId
 }
-func Set_AWS_Env_Vars(dburl string, brokerurl string, pixurl string, nhsoid string, regoid string) {
-	TUK_DB_URL = dburl
-	DSUB_BROKER_URL = brokerurl
-	PIX_MANAGER_URL = pixurl
-	NHS_OID = nhsoid
-	REGIONAL_OID = regoid
-}
-func SetTUKDBURL(dburl string) {
-	TUK_DB_URL = dburl
-}
-func SetDSUBBrokerURL(brokerurl string) {
-	DSUB_BROKER_URL = brokerurl
-}
-func SetDSUBConsumerURL(consumerurl string) {
-	DSUB_CONSUMER_URL = consumerurl
-}
-func SetPIXURL(pixurl string) {
-	PIX_MANAGER_URL = pixurl
-}
-func SetNHSOID(nhsoid string) {
-	NHS_OID = nhsoid
-}
-func SetRegionalOID(regionaloid string) {
-	REGIONAL_OID = regionaloid
-}
-func SetBaseFolder(baseFolder string) {
-	base_Folder = baseFolder
-}
-func SetLogFolder(logFolder string) {
-	log_Folder = base_Folder + "/" + logFolder
-}
-func SetConfigFolder(configFolder string) {
-	config_Folder = base_Folder + "/" + configFolder
-}
-func SetTemplateFolder(templateFolder string) {
-	templates_Folder = config_Folder + "/" + templateFolder
-}
-
-// SetCodeSystemFile sets the codesystem file.
-//
-//	The codesystem file can be used to provide mapping of values.
-//	If the input value does not have a suffix of `.json`, .json is appended
-//
-// The default filename is `codesystem.json'
-func SetCodeSystemFile(codeSystemFile string) {
-	if strings.HasSuffix(codeSystemFile, ".json") {
-		codeSystem_File = config_Folder + "/" + codeSystemFile
-	} else {
-		codeSystem_File = config_Folder + "/" + codeSystemFile + ".json"
-	}
-}
-func InitCodeSystem() {
-	util.LoadCodeSystemFile(codeSystem_File)
-}
-
-// SetIsSecure sets the Tuk Server http_Scheme to https if true or http is false. Default is false
-func SetIsSecure(isSecure bool) {
-	is_Secure = isSecure
-	if is_Secure {
-		http_Scheme = "https://"
-	} else {
-		http_Scheme = "http://"
-	}
-}
-
-// SetServerPort sets the Tuk Server port.
-//
-//	The default is `8080'
-func SetServerPort(srvport string) {
-	if !strings.HasPrefix(srvport, ":") {
-		port = ":" + srvport
-	}
-}
-
-// SetServerResourceURL sets the Tuk Server URL base resource.
-//
-//	The default is `/eventservice'
-func SetServerResourceURL(url string) {
-	if !strings.HasPrefix(url, "/") {
-		baseResourceUrl = "/" + url
-	}
-}
-
-// SetFoldersAndFiles is a convieniance method to intialise the tuk interface system folders and files.
-//
-//	It calls :
-//		SetBaseFolder(baseFolder)
-//		SetLogFolder(logFolder)
-//		SetConfigFolder(configFolder)
-//		SetTemplateFolder(templateFolder)
-//		SetCodeSystemFile(codeSysFile)
-func SetFoldersAndFiles(baseFolder string, logFolder string, configFolder string, templateFolder string, codeSysFile string) {
-	SetBaseFolder(baseFolder)
-	SetLogFolder(logFolder)
-	SetConfigFolder(configFolder)
-	SetTemplateFolder(templateFolder)
-	SetCodeSystemFile(codeSysFile)
-}
 
 // InitLog calls tukutils.CreateLog(logFolder) which checks if the log folder exists and creates it if not. If no log folder has been set it defaults to `basepath/logs/` It then checks for a subfolder for the current year i.e. 2022 and creates it if it does not exist. It then checks for a log file with a name equal to the current day and month and extension .log i.e. 0905.log. If it exists log output is appended to the existing file otherwise a new log file is created.
-func InitLog() {
-	logFile = util.CreateLog(log_Folder)
+func Init_Log() {
+	LogFile = util.CreateLog(State.LogFolder)
 }
 
 // CloseLog closes logging to the log file
-func CloseLog() {
-	logFile.Close()
+func Close_Log() {
+	LogFile.Close()
 }
-func LoadTemplates() error {
+func Load_Templates() error {
 	var err error
-	htmlTemplates, err = template.New(cnst.HTML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "/*.html")
+	HtmlTemplates, err = template.New(tukcnst.HTML).Funcs(util.TemplateFuncMap()).ParseGlob(State.TemplateFolder + "/*.html")
 	if err != nil {
 		return err
 	}
-	xmlTemplates, err = template.New(cnst.XML).Funcs(util.TemplateFuncMap()).ParseGlob(templates_Folder + "/*.xml")
+	XmlTemplates, err = template.New(tukcnst.XML).Funcs(util.TemplateFuncMap()).ParseGlob(State.TemplateFolder + "/*.xml")
 	if err != nil {
 		return err
 	}
-	log.Printf("Initialised %v HTML and %v XML templates", len(htmlTemplates.Templates()), len(xmlTemplates.Templates()))
+	log.Printf("Initialised %v HTML and %v XML templates", len(HtmlTemplates.Templates()), len(XmlTemplates.Templates()))
 	return nil
 }
-func InitLambdaVars() {
-	if os.Getenv("TUK_DB_URL") != "" {
-		TUK_DB_URL = os.Getenv("TUK_DB_URL")
-		log.Printf("Set TUK_DB_URL %s from AWS environment variable", TUK_DB_URL)
-	} else {
-		log.Println("AWS TUK_DB_URL environment variable is empty")
-	}
-	if os.Getenv("PIX_MANAGER_URL") != "" {
-		PIX_MANAGER_URL = os.Getenv("PIX_MANAGER_URL")
-		log.Printf("Set PIX_MANAGER_URL %s from AWS environment variable", PIX_MANAGER_URL)
-	} else {
-		log.Println("AWS PIX_MANAGER_URL environment variable is empty")
-	}
-	if os.Getenv("DSUB_BROKER_URL") != "" {
-		DSUB_BROKER_URL = os.Getenv("DSUB_BROKER_URL")
-		log.Printf("Set DSUB_BROKER_URL %s from AWS environment variable", DSUB_BROKER_URL)
-	} else {
-		log.Println("AWS DSUB_BROKER_URL environment variable is empty")
-	}
-	if os.Getenv("REGIONAL_OID") != "" {
-		REGIONAL_OID = os.Getenv("REGIONAL_OID")
-		log.Printf("Set REGIONAL_OID %s from AWS environment variable", REGIONAL_OID)
-	} else {
-		log.Println("AWS REGIONAL_OID environment variable is empty")
-	}
-	if os.Getenv("NHS_OID") != "" {
-		NHS_OID = os.Getenv("NHS_OID")
-		log.Printf("Set NHS_OID %s from AWS environment variable", NHS_OID)
-	} else {
-		log.Println("AWS NHS_OID environment variable is empty")
-	}
-}
+
 func NewHTTPServer(basefolder string, logfolder string, configfolder string, templatefolder string, codesystemfile string, baseresourceurl string, port string) {
 	srv := TukHttpServer{
 		BaseFolder:      basefolder,
@@ -485,91 +428,53 @@ func NewHTTPServer(basefolder string, logfolder string, configfolder string, tem
 	srv.NewHTTPServer()
 }
 func (i *TukHttpServer) NewHTTPServer() {
-	if i.BaseFolder != "" {
-		SetBaseFolder(i.BaseFolder)
-	}
-	if base_Folder == "" {
-		log.Println("Error - BaseFolder must be set")
-		return
-	}
-	if i.LogFolder != "" {
-		SetLogFolder(i.LogFolder)
-	}
-	if log_Folder == "" {
-		SetLogFolder("logs")
-	}
-	if i.ConfigFolder != "" {
-		SetConfigFolder(i.ConfigFolder)
-	}
-	if config_Folder == "" {
-		SetConfigFolder("configs")
-	}
-	if i.TemplateFolder != "" {
-		SetTemplateFolder(i.TemplateFolder)
-	}
-	if templates_Folder == "" {
-		SetTemplateFolder("templates")
-	}
-	if i.CodeSystemFile != "" {
-		SetCodeSystemFile(i.CodeSystemFile)
-	}
-	if codeSystem_File == "" {
-		SetCodeSystemFile("codesystem")
-	}
-	if i.BaseResourceUrl != "" {
-		SetServerResourceURL(i.BaseResourceUrl)
-	}
-	if i.Port != "" {
-		SetServerPort(i.Port)
-	}
-	if err := LoadTemplates(); err != nil {
+	if err := Load_Templates(); err != nil {
 		log.Println(err.Error())
 		return
 	}
-	hostname, _ = os.Hostname()
-	http.HandleFunc(baseResourceUrl, util.WriteResponseHeaders(route_TUK_Server_Request))
-	log.Printf("Initialised HTTP Server - Listening on %s", GetServerURL())
+	http.HandleFunc(State.HTTPServerState.BaseResourceUrl, util.WriteResponseHeaders(route_TUK_Server_Request))
+	log.Printf("Initialised HTTP Server - Listening on %s", Get_ServerURL())
 	util.MonitorApp()
-	log.Fatal(http.ListenAndServe(port, nil))
+	log.Fatal(http.ListenAndServe(State.HTTPServerState.Port, nil))
 
 }
 
-func GetServerURL() string {
-	return http_Scheme + hostname + port + baseResourceUrl
+func Get_ServerURL() string {
+	return State.HTTPServerState.Http_Scheme + State.HTTPServerState.Hostname + State.HTTPServerState.Port + State.HTTPServerState.BaseResourceUrl
 }
-func InitXDWWorkflowDocument(tukwf dbint.Workflow) (XDWWorkflowDocument, error) {
+func Init_XDWWorkflowDocument(tukwf dbint.Workflow) (XDWWorkflowDocument, error) {
 	var err error
 	xdwStruc := XDWWorkflowDocument{}
 	err = json.Unmarshal([]byte(tukwf.XDW_Doc), &xdwStruc)
 	return xdwStruc, err
 }
-func InitXDWDefinition(tukwf dbint.Workflow) (WorkflowDefinition, error) {
+func Init_XDWDefinition(tukwf dbint.Workflow) (WorkflowDefinition, error) {
 	var err error
 	xdwdef := WorkflowDefinition{}
 	err = json.Unmarshal([]byte(tukwf.XDW_Def), &xdwdef)
 	return xdwdef, err
 }
 func route_TUK_Server_Request(rsp http.ResponseWriter, r *http.Request) {
-	req := ClientRequest{ServerURL: GetServerURL()}
-	if err := req.parseHTTPRequest(r); err == nil {
+	req := ClientRequest{ServerURL: Get_ServerURL()}
+	if err := req.parse_HTTPRequest(r); err == nil {
 		Log(req)
-		rsp.Write([]byte(req.ProcessClientRequest()))
+		rsp.Write([]byte(req.Process_ClientRequest()))
 	} else {
 		log.Println(err.Error())
 	}
 }
-func (i *ClientRequest) parseHTTPRequest(req *http.Request) error {
+func (i *ClientRequest) parse_HTTPRequest(req *http.Request) error {
 	log.Printf("Received http %s request", req.Method)
 	req.ParseForm()
-	i.Act = req.FormValue(cnst.ACT)
-	i.User = req.FormValue("user")
+	i.Act = req.FormValue(tukcnst.ACT)
+	i.User = req.FormValue(tukcnst.QUERY_PARAM_USER)
 	i.Org = req.FormValue("org")
-	i.Orgoid = util.GetCodeSystemVal(req.FormValue("org"))
-	i.Role = req.FormValue("role")
-	i.NHS = req.FormValue("nhs")
-	i.PID = req.FormValue("pid")
-	i.PIDOrg = req.FormValue("pidorg")
-	i.PIDOID = util.GetCodeSystemVal(req.FormValue("pidorg"))
+	i.Orgoid = util.GetCodeSystemVal(req.FormValue(tukcnst.QUERY_PARAM_ORG))
+	i.Role = req.FormValue(tukcnst.QUERY_PARAM_ROLE)
+	i.NHS_ID = req.FormValue(tukcnst.QUERY_PARAM_NHS_ID)
+	i.MRN_ID = req.FormValue("pid")
+	i.MRN_Org = req.FormValue("pidorg")
+	i.MRN_OID = util.GetCodeSystemVal(req.FormValue("pidorg"))
 	i.FamilyName = req.FormValue("familyname")
 	i.GivenName = req.FormValue("givenname")
 	i.DOB = req.FormValue("dob")
@@ -577,56 +482,56 @@ func (i *ClientRequest) parseHTTPRequest(req *http.Request) error {
 	i.ZIP = req.FormValue("zip")
 	i.Status = req.FormValue("status")
 	i.ID = util.GetIntFromString(req.FormValue("id"))
-	i.Task = req.FormValue(cnst.TASK)
-	i.Pathway = req.FormValue(cnst.PATHWAY)
+	i.Task = req.FormValue(tukcnst.TASK)
+	i.Pathway = req.FormValue(tukcnst.PATHWAY)
 	i.Version = util.GetIntFromString(req.FormValue("version"))
 	i.XDWKey = req.FormValue("xdwkey")
-	i.ReturnFormat = req.Header.Get(cnst.ACCEPT)
+	i.ReturnFormat = req.Header.Get(tukcnst.ACCEPT)
 	if len(i.XDWKey) > 12 {
-		i.Pathway, i.NHS = util.SplitXDWKey(i.XDWKey)
+		i.Pathway, i.NHS_ID = util.SplitXDWKey(i.XDWKey)
 	}
 	return nil
 }
-func (req *ClientRequest) ProcessClientRequest() string {
+func (req *ClientRequest) Process_ClientRequest() string {
 	log.Printf("Processing %s Request", req.Act)
 	switch req.Act {
-	case cnst.DASHBOARD:
-		return req.NewDashboardRequest()
-	case cnst.WORKFLOWS:
-		return req.NewWorkflowsRequest()
-	case cnst.WORKFLOW:
-		return req.NewWorkflowRequest()
-	case cnst.TASK:
-		return req.NewTaskRequest()
-	case cnst.PATIENT:
-		return req.NewPatientRequest()
+	case tukcnst.DASHBOARD:
+		return req.New_DashboardRequest()
+	case tukcnst.WORKFLOWS:
+		return req.New_WorkflowsRequest()
+	case tukcnst.WORKFLOW:
+		return req.New_WorkflowRequest()
+	case tukcnst.TASK:
+		return req.New_TaskRequest()
+	case tukcnst.PATIENT:
+		return req.New_PatientRequest()
 	}
 	return "Nothing to process"
 }
-func (i *ClientRequest) NewPatientRequest() string {
-	tukpdq := pdq.PDQQuery{
-		Server:     cnst.PIXm,
-		Server_URL: PIX_MANAGER_URL,
-		NHS_ID:     i.NHS,
-		REG_OID:    REGIONAL_OID,
+func (i *ClientRequest) New_PatientRequest() string {
+	query := tukpdq.PDQQuery{
+		Server:     tukcnst.PIXm,
+		Server_URL: State.PDQ_Server_URL,
+		NHS_ID:     i.NHS_ID,
+		REG_OID:    i.REG_OID,
 	}
-	if err := pdq.PDQ(&tukpdq); err != nil {
+	if err := tukpdq.PDQ(&query); err != nil {
 		return err.Error()
 	}
 	var b bytes.Buffer
-	if err := htmlTemplates.ExecuteTemplate(&b, "pixpatient", tukpdq.Response); err != nil {
+	if err := HtmlTemplates.ExecuteTemplate(&b, "pixpatient", query.Response); err != nil {
 		log.Println(err.Error())
 	}
 	return b.String()
 }
-func (i *ClientRequest) NewTaskRequest() string {
+func (i *ClientRequest) New_TaskRequest() string {
 	if i.ID < 1 || i.Pathway == "" {
 		return "Invalid request. Task ID and Pathway required"
 	}
 	wfdoc := XDWWorkflowDocument{}
 	wfdef := WorkflowDefinition{}
 
-	wfs := dbint.Workflows{Action: cnst.SELECT}
+	wfs := dbint.Workflows{Action: tukcnst.SELECT}
 	wf := dbint.Workflow{XDW_Key: i.Pathway, Version: i.Version}
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err := AWS_Workflows_API_Request(&wfs); err != nil {
@@ -650,15 +555,15 @@ func (i *ClientRequest) NewTaskRequest() string {
 		XDW       XDWWorkflowDocument
 		XDWDef    WorkflowDefinition
 	}
-	it := itmplt{TaskId: util.GetStringFromInt(i.ID), ServerURL: GetServerURL(), XDW: wfdoc, XDWDef: wfdef}
+	it := itmplt{TaskId: util.GetStringFromInt(i.ID), ServerURL: Get_ServerURL(), XDW: wfdoc, XDWDef: wfdef}
 	var b bytes.Buffer
-	err := htmlTemplates.ExecuteTemplate(&b, "snip_workflow_task", it)
+	err := HtmlTemplates.ExecuteTemplate(&b, "snip_workflow_task", it)
 	if err != nil {
 		log.Println(err.Error())
 	}
 	return b.String()
 }
-func (i *ClientRequest) NewWorkflowsRequest() string {
+func (i *ClientRequest) New_WorkflowsRequest() string {
 	type TmpltWorkflow struct {
 		Created   string
 		NHS       string
@@ -668,7 +573,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 		Version   int
 		XDW       XDWWorkflowDocument
 		XDWDef    WorkflowDefinition
-		Patient   pdq.PIXPatient
+		Patient   tukpdq.PIXPatient
 	}
 	type TmpltWorkflows struct {
 		Count     int
@@ -677,7 +582,7 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	}
 	tmpltwfs := TmpltWorkflows{ServerURL: i.ServerURL}
 
-	tukwfs := dbint.Workflows{Action: cnst.SELECT}
+	tukwfs := dbint.Workflows{Action: tukcnst.SELECT}
 	if err := AWS_Workflows_API_Request(&tukwfs); err != nil {
 		log.Println(err.Error())
 		return err.Error()
@@ -685,27 +590,27 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 	log.Printf("Processing %v workflows", tukwfs.Count)
 	for _, wf := range tukwfs.Workflows {
 		if wf.Id > 0 {
-			pat := pdq.PIXPatient{}
+			pat := tukpdq.PIXPatient{}
 			log.Printf("Initialising workflow document - id %v", wf.Id)
-			xdw, err := InitXDWWorkflowDocument(wf)
+			xdw, err := Init_XDWWorkflowDocument(wf)
 			if err != nil {
 				log.Println(err.Error())
 				continue
 			}
 			log.Printf("Initialised Workflow document - %s", wf.XDW_Key)
-			xdwdef, err := InitXDWDefinition(wf)
+			xdwdef, err := Init_XDWDefinition(wf)
 			if err != nil {
 				log.Println(err.Error())
 				continue
 			}
 			log.Printf("Initialised Workflow definition for Workflow document %s", xdwdef.Ref)
-			tukpdq := pdq.PDQQuery{
-				Server:     cnst.PIXm,
-				Server_URL: PIX_MANAGER_URL,
-				NHS_ID:     i.NHS,
-				REG_OID:    REGIONAL_OID,
+			query := tukpdq.PDQQuery{
+				Server:     tukcnst.PIXm,
+				Server_URL: State.PDQ_Server_URL,
+				NHS_ID:     i.NHS_ID,
+				REG_OID:    State.Reg_OID,
 			}
-			if err := pdq.PDQ(&tukpdq); err != nil {
+			if err := tukpdq.PDQ(&query); err != nil {
 				log.Println(err.Error())
 				continue
 			}
@@ -747,22 +652,22 @@ func (i *ClientRequest) NewWorkflowsRequest() string {
 		}
 	}
 	var b bytes.Buffer
-	err := htmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOWS, tmpltwfs)
+	err := HtmlTemplates.ExecuteTemplate(&b, tukcnst.WORKFLOWS, tmpltwfs)
 	if err != nil {
 		log.Println(err.Error())
 	}
 	log.Printf("Returning %v Workflows", tmpltwfs.Count)
 	return b.String()
 }
-func (i *ClientRequest) NewWorkflowRequest() string {
-	if i.XDWKey == "" && (i.Pathway == "" && i.NHS == "") {
+func (i *ClientRequest) New_WorkflowRequest() string {
+	if i.XDWKey == "" && (i.Pathway == "" && i.NHS_ID == "") {
 		return "Invalid request. Either xdwkey or Both Pathway and NHS ID are required"
 	}
 	if i.XDWKey == "" {
-		i.XDWKey = i.Pathway + i.NHS
+		i.XDWKey = i.Pathway + i.NHS_ID
 	}
 	xdw := XDWWorkflowDocument{}
-	wfs := dbint.Workflows{Action: cnst.SELECT}
+	wfs := dbint.Workflows{Action: tukcnst.SELECT}
 	wf := dbint.Workflow{XDW_Key: i.XDWKey, Version: i.Version}
 
 	wfs.Workflows = append(wfs.Workflows, wf)
@@ -779,23 +684,23 @@ func (i *ClientRequest) NewWorkflowRequest() string {
 		ServerURL string
 		XDW       XDWWorkflowDocument
 	}
-	itmplt := wftmplt{ServerURL: GetServerURL(), XDW: xdw}
+	itmplt := wftmplt{ServerURL: Get_ServerURL(), XDW: xdw}
 	var b bytes.Buffer
-	err := htmlTemplates.ExecuteTemplate(&b, cnst.WORKFLOW, itmplt)
+	err := HtmlTemplates.ExecuteTemplate(&b, tukcnst.WORKFLOW, itmplt)
 	if err != nil {
 		log.Println(err.Error())
 	}
 	log.Printf("Returning %v Workflow", xdw.WorkflowDefinitionReference)
 	return b.String()
 }
-func (i *ClientRequest) NewDashboardRequest() string {
+func (i *ClientRequest) New_DashboardRequest() string {
 	dashboard := Dashboard{}
-	wfs := dbint.Workflows{Action: cnst.SELECT}
+	wfs := dbint.Workflows{Action: tukcnst.SELECT}
 	AWS_Workflows_API_Request(&wfs)
 	log.Printf("Processing %v workflows", wfs.Count)
 	for _, wf := range wfs.Workflows {
 		dashboard.Total = dashboard.Total + 1
-		xdw, err := InitXDWWorkflowDocument(wf)
+		xdw, err := Init_XDWWorkflowDocument(wf)
 		if err != nil {
 			continue
 		}
@@ -816,20 +721,19 @@ func (i *ClientRequest) NewDashboardRequest() string {
 	}
 
 	var b bytes.Buffer
-	err := htmlTemplates.ExecuteTemplate(&b, "dashboardwidget", dashboard)
+	err := HtmlTemplates.ExecuteTemplate(&b, "dashboardwidget", dashboard)
 	if err != nil {
 		log.Println(err.Error())
 	}
 	return b.String()
 }
-func (i *EventMessage) NewDSUBBrokerEvent() error {
-	InitLambdaVars()
+func (i *EventMessage) New_DSUBBrokerEvent() error {
 	dsubEvent := dsub.DSUBEvent{Message: i.Message}
 	return dsub.NewDsubEvent(&dsubEvent)
 }
-func UpdateWorkflow(i *dbint.Event, pat pdq.PIXPatient) {
+func Update_Workflow(i *dbint.Event, pat tukpdq.PIXPatient) {
 	log.Printf("Updating %s Workflow for patient %s %s %s", i.Pathway, pat.GivenName, pat.FamilyName, i.NhsId)
-	tukwfdefs := dbint.XDWS{Action: cnst.SELECT}
+	tukwfdefs := dbint.XDWS{Action: tukcnst.SELECT}
 	tukwfdef := dbint.XDW{Name: i.Pathway}
 	tukwfdefs.XDW = append(tukwfdefs.XDW, tukwfdef)
 	if err := AWS_XDWs_API_Request(&tukwfdefs); err != nil {
@@ -846,7 +750,7 @@ func UpdateWorkflow(i *dbint.Event, pat pdq.PIXPatient) {
 		log.Println("Parsed Workflow Definition for Pathway " + wfdef.Ref)
 
 		log.Printf("Searching for existing workflow for %s %s", i.Pathway, i.NhsId)
-		tukwfdocs := dbint.Workflows{Action: cnst.SELECT}
+		tukwfdocs := dbint.Workflows{Action: tukcnst.SELECT}
 		tukwfdoc := dbint.Workflow{XDW_Key: i.Pathway + i.NhsId}
 		tukwfdocs.Workflows = append(tukwfdocs.Workflows, tukwfdoc)
 		if err := AWS_Workflows_API_Request(&tukwfdocs); err != nil {
@@ -855,9 +759,9 @@ func UpdateWorkflow(i *dbint.Event, pat pdq.PIXPatient) {
 		}
 		if tukwfdocs.Count == 0 {
 			log.Printf("No existing workflow state found for %s %s", i.Pathway, i.NhsId)
-			newWorkflow := NewXDWContentCreator(i.User, "", i.Org, util.GetCodeSystemVal(i.Org), wfdef, pat)
+			newWorkflow := New_XDWContentCreator(i.User, "", i.Org, util.GetCodeSystemVal(i.Org), wfdef, pat)
 			log.Println("Persisting Workflow state")
-			if err := PersistWorkflowDocument(newWorkflow, wfdef); err != nil {
+			if err := Persist_WorkflowDocument(newWorkflow, wfdef); err != nil {
 				log.Println(err.Error())
 				return
 			}
@@ -871,14 +775,14 @@ func UpdateWorkflow(i *dbint.Event, pat pdq.PIXPatient) {
 	}
 }
 
-func NewXDWContentUpdator(i *dbint.Event, wfdef WorkflowDefinition, wf XDWWorkflowDocument, pat pdq.PIXPatient) {
+func New_XDWContentUpdator(i *dbint.Event, wfdef WorkflowDefinition, wf XDWWorkflowDocument, pat tukpdq.PIXPatient) {
 	log.Printf("Updating %s Workflow for NHS ID %s with latest events", wf.WorkflowDefinitionReference, pat.NHSID)
-	if wf.WorkflowStatus == cnst.COMPLETE || wf.WorkflowStatus == "CLOSED" {
+	if wf.WorkflowStatus == tukcnst.COMPLETE || wf.WorkflowStatus == "CLOSED" {
 		log.Printf("Workflow state is %s.", wf.WorkflowStatus)
 		return
 	}
 	pwy, nhs := util.SplitXDWKey(wf.WorkflowDefinitionReference)
-	tukEvents := dbint.Events{Action: cnst.SELECT}
+	tukEvents := dbint.Events{Action: tukcnst.SELECT}
 	tukEvent := dbint.Event{Pathway: pwy, NhsId: nhs}
 	tukEvents.Events = append(tukEvents.Events, tukEvent)
 	if err := AWS_Events_API_Request(&tukEvents); err != nil {
@@ -902,11 +806,11 @@ func NewXDWContentUpdator(i *dbint.Event, wfdef WorkflowDefinition, wf XDWWorkfl
 					wf.TaskList.XDWTask[k].TaskData.TaskDetails.ActualOwner = ev.User + " " + ev.Org + " " + ev.Role
 					if strings.HasSuffix(wfdoctask.TaskData.Input[inp].Part.AttachmentInfo.AccessType, "XDSregistered") {
 						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.Identifier = ev.RepositoryUniqueId + ":" + ev.XdsDocEntryUid
-						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.HomeCommunityId = REGIONAL_OID
-						wf.NewWorkflowTaskEvent(ev, k)
+						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.HomeCommunityId = State.Reg_OID
+						wf.New_WorkflowTaskEvent(ev, k)
 					} else {
 						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.Identifier = strconv.Itoa(int(ev.EventId))
-						wf.NewWorkflowTaskEvent(ev, k)
+						wf.New_WorkflowTaskEvent(ev, k)
 					}
 					wf.WorkflowStatus = "IN_PROGRESS"
 				}
@@ -922,11 +826,11 @@ func NewXDWContentUpdator(i *dbint.Event, wfdef WorkflowDefinition, wf XDWWorkfl
 					wf.TaskList.XDWTask[k].TaskData.TaskDetails.Status = "IN_PROGRESS"
 					if strings.HasSuffix(wfdoctask.TaskData.Output[oup].Part.AttachmentInfo.AccessType, "XDSregistered") {
 						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.Identifier = ev.RepositoryUniqueId + ":" + ev.XdsDocEntryUid
-						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.HomeCommunityId = REGIONAL_OID
-						wf.NewWorkflowTaskEvent(ev, k)
+						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.HomeCommunityId = State.Reg_OID
+						wf.New_WorkflowTaskEvent(ev, k)
 					} else {
 						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.Identifier = strconv.Itoa(int(ev.EventId))
-						wf.NewWorkflowTaskEvent(ev, k)
+						wf.New_WorkflowTaskEvent(ev, k)
 					}
 					wf.WorkflowStatus = "IN_PROGRESS"
 
@@ -944,22 +848,22 @@ func NewXDWContentUpdator(i *dbint.Event, wfdef WorkflowDefinition, wf XDWWorkfl
 	for task := range wf.TaskList.XDWTask {
 		if wf.TaskList.XDWTask[task].TaskData.TaskDetails.Status != "COMPLETE" {
 			if isTaskCompleteBehaviorMet(wf, wfdef, task) {
-				wf.TaskList.XDWTask[task].TaskData.TaskDetails.Status = cnst.COMPLETE
+				wf.TaskList.XDWTask[task].TaskData.TaskDetails.Status = tukcnst.COMPLETE
 			}
 		}
 	}
 	if isWorkflowCompleteBehaviorMet(wf, wfdef) {
-		wf.WorkflowStatus = cnst.COMPLETE
+		wf.WorkflowStatus = tukcnst.COMPLETE
 		docevent := DocumentEvent{}
 		docevent.Author = i.User
 		docevent.TaskEventIdentifier = util.Newid()
 		docevent.EventTime = i.Creationtime
-		docevent.EventType = cnst.CLOSED
+		docevent.EventType = tukcnst.CLOSED
 		docevent.PreviousStatus = wf.WorkflowStatusHistory.DocumentEvent[len(wf.WorkflowStatusHistory.DocumentEvent)-1].ActualStatus
-		docevent.ActualStatus = cnst.COMPLETE
+		docevent.ActualStatus = tukcnst.COMPLETE
 		wf.WorkflowStatusHistory.DocumentEvent = append(wf.WorkflowStatusHistory.DocumentEvent, docevent)
 		for k := range wf.TaskList.XDWTask {
-			wf.TaskList.XDWTask[k].TaskData.TaskDetails.Status = cnst.COMPLETE
+			wf.TaskList.XDWTask[k].TaskData.TaskDetails.Status = tukcnst.COMPLETE
 		}
 		log.Println("Closed Workflow. Total Workflow Document Events " + strconv.Itoa(len(wf.WorkflowStatusHistory.DocumentEvent)))
 	} else {
@@ -982,7 +886,7 @@ func isWorkflowCompleteBehaviorMet(wf XDWWorkflowDocument, wfdef WorkflowDefinit
 				endMethodInd := strings.Index(condition, "(")
 				if endMethodInd > 0 {
 					method := condition[0:endMethodInd]
-					if method != cnst.TASK {
+					if method != tukcnst.TASK {
 						log.Println(method + " is an Invalid Workflow Completion Behaviour Condition method. Ignoring Condition")
 						continue
 					}
@@ -1053,31 +957,31 @@ func isTaskCompleteBehaviorMet(wf XDWWorkflowDocument, wfdef WorkflowDefinition,
 	}
 	return false
 }
-func (i *XDWWorkflowDocument) NewWorkflowHistoryEvent(event dbint.Event) {
+func (i *XDWWorkflowDocument) New_WorkflowHistoryEvent(event dbint.Event) {
 	docevent := DocumentEvent{}
 	docevent.Author = event.User
 	docevent.TaskEventIdentifier = strconv.Itoa(int(event.EventId))
 	docevent.EventTime = util.Time_Now()
 	docevent.EventType = event.Expression
 	if len(i.WorkflowStatusHistory.DocumentEvent) > 0 {
-		docevent.PreviousStatus = cnst.READY
+		docevent.PreviousStatus = tukcnst.READY
 	} else {
-		docevent.PreviousStatus = cnst.IN_PROGRESS
+		docevent.PreviousStatus = tukcnst.IN_PROGRESS
 	}
-	docevent.ActualStatus = cnst.IN_PROGRESS
+	docevent.ActualStatus = tukcnst.IN_PROGRESS
 	i.WorkflowStatusHistory.DocumentEvent = append(i.WorkflowStatusHistory.DocumentEvent, docevent)
 }
-func (i *XDWWorkflowDocument) NewWorkflowTaskEvent(event dbint.Event, task int) {
+func (i *XDWWorkflowDocument) New_WorkflowTaskEvent(event dbint.Event, task int) {
 	nte := TaskEvent{
 		ID:         strconv.Itoa(len(i.TaskList.XDWTask[task].TaskEventHistory.TaskEvent) + 1),
 		EventTime:  util.Time_Now(),
 		Identifier: strconv.Itoa(int(event.EventId)),
 		EventType:  event.Expression,
-		Status:     cnst.COMPLETE,
+		Status:     tukcnst.COMPLETE,
 	}
 	i.TaskList.XDWTask[task].TaskEventHistory.TaskEvent = append(i.TaskList.XDWTask[task].TaskEventHistory.TaskEvent, nte)
 }
-func (i *XDWWorkflowDocument) UpdateXDWWorkflowDocument(events dbint.Events) {
+func (i *XDWWorkflowDocument) Update_XDWWorkflowDocument(events dbint.Events) {
 	for _, event := range events.Events {
 		for _, task := range i.TaskList.XDWTask {
 			for _, inp := range task.TaskData.Input {
@@ -1101,10 +1005,10 @@ func (i *XDWWorkflowDocument) UpdateXDWWorkflowDocument(events dbint.Events) {
 }
 
 // New XDWDefinition takes an input string containing the workflow ref. It returns a WorkflowDefinition struc for the requested workflow
-func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
+func New_XDWDefinition(workflow string) (WorkflowDefinition, error) {
 	var err error
 	xdwdef := WorkflowDefinition{}
-	xdws := dbint.XDWS{Action: cnst.SELECT}
+	xdws := dbint.XDWS{Action: tukcnst.SELECT}
 	xdw := dbint.XDW{Name: workflow}
 	xdws.XDW = append(xdws.XDW, xdw)
 	err = dbint.NewDBEvent(&xdws)
@@ -1120,19 +1024,19 @@ func NewXDWDefinition(workflow string) (WorkflowDefinition, error) {
 }
 
 // NewXDWContentCreator takes input string for author details, a workflo definition and patient struct. It returns a new XDW compliant Document
-func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, authorOID string, xdwdef WorkflowDefinition, pat pdq.PIXPatient) XDWWorkflowDocument {
+func New_XDWContentCreator(author string, authorPrefix string, authorOrg string, authorOID string, xdwdef WorkflowDefinition, pat tukpdq.PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s XDW Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
 	xdwdoc := XDWWorkflowDocument{}
 	var authorname = author
 	var authoroid = authorOID
 	var wfid = util.Newid()
-	xdwdoc.Xdw = cnst.XDWNameSpace
-	xdwdoc.Hl7 = cnst.HL7NameSpace
-	xdwdoc.WsHt = cnst.WHTNameSpace
-	xdwdoc.Xsi = cnst.XMLNS_XSI
-	xdwdoc.XMLName.Local = cnst.XDWNameLocal
-	xdwdoc.SchemaLocation = cnst.WorkflowDocumentSchemaLocation
-	xdwdoc.ID.Root = strings.ReplaceAll(cnst.WorkflowInstanceId, "^", "")
+	xdwdoc.Xdw = tukcnst.XDWNameSpace
+	xdwdoc.Hl7 = tukcnst.HL7NameSpace
+	xdwdoc.WsHt = tukcnst.WHTNameSpace
+	xdwdoc.Xsi = tukcnst.XMLNS_XSI
+	xdwdoc.XMLName.Local = tukcnst.XDWNameLocal
+	xdwdoc.SchemaLocation = tukcnst.WorkflowDocumentSchemaLocation
+	xdwdoc.ID.Root = strings.ReplaceAll(tukcnst.WorkflowInstanceId, "^", "")
 	xdwdoc.ID.Extension = wfid
 	xdwdoc.ID.AssigningAuthorityName = "ICS"
 	xdwdoc.EffectiveTime.Value = util.Time_Now()
@@ -1145,7 +1049,7 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 	xdwdoc.Author.AssignedAuthor.ID.AssigningAuthorityName = strings.ToUpper(authorname)
 	xdwdoc.Author.AssignedAuthor.AssignedPerson.Name.Family = author
 	xdwdoc.Author.AssignedAuthor.AssignedPerson.Name.Prefix = authorPrefix
-	xdwdoc.WorkflowInstanceId = wfid + cnst.WorkflowInstanceId
+	xdwdoc.WorkflowInstanceId = wfid + tukcnst.WorkflowInstanceId
 	xdwdoc.WorkflowDocumentSequenceNumber = "1"
 	xdwdoc.WorkflowStatus = "READY"
 	xdwdoc.WorkflowDefinitionReference = strings.ToUpper(xdwdef.Ref) + pat.NHSID
@@ -1171,7 +1075,7 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 			part.AttachmentInfo.Name = inp.Name
 			part.AttachmentInfo.AccessType = inp.AccessType
 			part.AttachmentInfo.ContentType = inp.Contenttype
-			part.AttachmentInfo.ContentCategory = cnst.MEDIA_TYPES
+			part.AttachmentInfo.ContentCategory = tukcnst.MEDIA_TYPES
 			docinput.Part = part
 			task.TaskData.Input = append(task.TaskData.Input, docinput)
 		}
@@ -1183,7 +1087,7 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 			part.AttachmentInfo.Name = outp.Name
 			part.AttachmentInfo.AccessType = outp.AccessType
 			part.AttachmentInfo.ContentType = outp.Contenttype
-			part.AttachmentInfo.ContentCategory = cnst.MEDIA_TYPES
+			part.AttachmentInfo.ContentCategory = tukcnst.MEDIA_TYPES
 			docoutput.Part = part
 			task.TaskData.Output = append(task.TaskData.Output, docoutput)
 		}
@@ -1226,21 +1130,18 @@ func NewXDWContentCreator(author string, authorPrefix string, authorOrg string, 
 //		tukint.SetDSUBConsumerURL("https://cjrvrddgdh.execute-api.eu-west-1.amazonaws.com/beta/")
 //
 //	If you want the log output sent to a file rather than the terminal/console call tukint.InitLog() before calling RegisterXDWDefinitions() and tukint.CloseLog() before exiting
-func RegisterXDWDefinitions(folder string) (dbint.Subscriptions, error) {
+func Register_XDWDefinitions() (dbint.Subscriptions, error) {
 	var folderfiles []fs.DirEntry
 	var file fs.DirEntry
 	var err error
-	var rspSubs = dbint.Subscriptions{Action: cnst.INSERT}
-	if folder != "" {
-		config_Folder = folder
-	}
-	if folderfiles, err = util.GetFolderFiles(config_Folder); err == nil {
+	var rspSubs = dbint.Subscriptions{Action: tukcnst.INSERT}
+	if folderfiles, err = util.GetFolderFiles(State.ConfigFolder); err == nil {
 		for _, file = range folderfiles {
-			if strings.HasSuffix(file.Name(), ".json") && strings.Contains(file.Name(), cnst.XDW_DEFINITION_FILE) {
-				if xdwdef, xdwbytes, err := NewWorkflowDefinitionFromFile(file); err == nil {
-					if err = DeleteTukWorkflowSubscriptions(xdwdef); err == nil {
-						if err = DeleteTukWorkflowDefinition(xdwdef); err == nil {
-							pwExps := GetXDWBrokerExpressions(xdwdef)
+			if strings.HasSuffix(file.Name(), ".json") && strings.Contains(file.Name(), tukcnst.XDW_DEFINITION_FILE) {
+				if xdwdef, xdwbytes, err := New_WorkflowDefinitionFromFile(file); err == nil {
+					if err = Delete_TukWorkflowSubscriptions(xdwdef); err == nil {
+						if err = Delete_TukWorkflowDefinition(xdwdef); err == nil {
+							pwExps := Get_XDWBrokerExpressions(xdwdef)
 							pwSubs := dbint.Subscriptions{}
 							if pwSubs, err = CreateSubscriptionsFromBrokerExpressions(pwExps); err == nil {
 								rspSubs.Subscriptions = append(rspSubs.Subscriptions, pwSubs.Subscriptions...)
@@ -1248,8 +1149,8 @@ func RegisterXDWDefinitions(folder string) (dbint.Subscriptions, error) {
 								rspSubs.LastInsertId = pwSubs.LastInsertId
 								var xdwdefBytes = make(map[string][]byte)
 								xdwdefBytes[xdwdef.Ref] = xdwbytes
-								PersistXDWDefinitions(xdwdefBytes)
-								if err := os.Rename(config_Folder+"/"+file.Name(), config_Folder+"/"+file.Name()+".deployed"); err != nil {
+								Persist_XDWDefinitions(xdwdefBytes)
+								if err := os.Rename(State.ConfigFolder+"/"+file.Name(), State.ConfigFolder+"/"+file.Name()+".deployed"); err != nil {
 									log.Println(err.Error())
 								}
 							}
@@ -1264,7 +1165,7 @@ func RegisterXDWDefinitions(folder string) (dbint.Subscriptions, error) {
 	}
 	return rspSubs, err
 }
-func PersistXDWDefinitions(xdwdefs map[string][]byte) error {
+func Persist_XDWDefinitions(xdwdefs map[string][]byte) error {
 	cnt := 0
 	for ref, def := range xdwdefs {
 		if ref != "" {
@@ -1291,9 +1192,9 @@ func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (dbi
 		log.Printf("Creating Broker Subscription for %s workflow expression %s", pwy, exp)
 
 		sub := dsub.DSUBSubscribe{
-			BrokerUrl:   DSUB_BROKER_URL,
-			ConsumerUrl: DSUB_CONSUMER_URL,
-			Topic:       cnst.DSUB_TOPIC_TYPE_CODE,
+			BrokerUrl:   State.DSUB_Broker_URL,
+			ConsumerUrl: State.DSUB_Consumer_URL,
+			Topic:       tukcnst.DSUB_TOPIC_TYPE_CODE,
 			Expression:  exp,
 		}
 		if err = dsub.NewDsubEvent(&sub); err != nil {
@@ -1303,10 +1204,10 @@ func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (dbi
 			tuksub := dbint.Subscription{
 				BrokerRef:  sub.BrokerRef,
 				Pathway:    pwy,
-				Topic:      cnst.DSUB_TOPIC_TYPE_CODE,
+				Topic:      tukcnst.DSUB_TOPIC_TYPE_CODE,
 				Expression: exp,
 			}
-			tuksubs := dbint.Subscriptions{Action: cnst.INSERT}
+			tuksubs := dbint.Subscriptions{Action: tukcnst.INSERT}
 			tuksubs.Subscriptions = append(tuksubs.Subscriptions, tuksub)
 			log.Println("Registering Subscription Reference with Event Service")
 			if err = dbint.NewDBEvent(&tuksubs); err != nil {
@@ -1324,7 +1225,7 @@ func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (dbi
 	}
 	return rspSubs, err
 }
-func GetXDWBrokerExpressions(xdwdef WorkflowDefinition) map[string]string {
+func Get_XDWBrokerExpressions(xdwdef WorkflowDefinition) map[string]string {
 	log.Printf("Parsing %s XDW Tasks for potential DSUB Broker Subscriptions", xdwdef.Ref)
 	var brokerExps = make(map[string]string)
 	for _, task := range xdwdef.Tasks {
@@ -1349,15 +1250,15 @@ func GetXDWBrokerExpressions(xdwdef WorkflowDefinition) map[string]string {
 	}
 	return brokerExps
 }
-func DeleteTukWorkflowDefinition(xdwdef WorkflowDefinition) error {
+func Delete_TukWorkflowDefinition(xdwdef WorkflowDefinition) error {
 	var err error
 	var body []byte
-	activexdws := TUKXDWS{Action: cnst.DELETE}
+	activexdws := TUKXDWS{Action: tukcnst.DELETE}
 	activexdw := TUKXDW{Name: xdwdef.Ref}
 	activexdws.XDW = append(activexdws.XDW, activexdw)
 	if body, err = json.Marshal(activexdws); err == nil {
 		log.Printf("Deleting TUK Workflow Definition for %s workflow", xdwdef.Ref)
-		if _, err = newAWS_APIRequest(http.MethodPost, cnst.TUK_DB_TABLE_XDWS, body); err == nil {
+		if _, err = new_AWS_APIRequest(http.MethodPost, tukcnst.TUK_DB_TABLE_XDWS, body); err == nil {
 			log.Printf("Deleted TUK Workflow Definition for %s workflow", xdwdef.Ref)
 		}
 	}
@@ -1366,15 +1267,15 @@ func DeleteTukWorkflowDefinition(xdwdef WorkflowDefinition) error {
 	}
 	return err
 }
-func DeleteTukWorkflowSubscriptions(xdwdef WorkflowDefinition) error {
+func Delete_TukWorkflowSubscriptions(xdwdef WorkflowDefinition) error {
 	var err error
 	var body []byte
-	activesubs := dbint.Subscriptions{Action: cnst.DELETE}
+	activesubs := dbint.Subscriptions{Action: tukcnst.DELETE}
 	activesub := dbint.Subscription{Pathway: xdwdef.Ref}
 	activesubs.Subscriptions = append(activesubs.Subscriptions, activesub)
 	if body, err = json.Marshal(activesubs); err == nil {
 		log.Printf("Deleting TUK Event Subscriptions for %s workflow", xdwdef.Ref)
-		if _, err = newAWS_APIRequest(http.MethodPost, cnst.TUK_DB_TABLE_SUBSCRIPTIONS, body); err == nil {
+		if _, err = new_AWS_APIRequest(http.MethodPost, tukcnst.TUK_DB_TABLE_SUBSCRIPTIONS, body); err == nil {
 			log.Printf("Deleted TUK Event Subscriptions for %s workflow", xdwdef.Ref)
 		}
 	}
@@ -1383,12 +1284,12 @@ func DeleteTukWorkflowSubscriptions(xdwdef WorkflowDefinition) error {
 	}
 	return err
 }
-func NewWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte, error) {
+func New_WorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte, error) {
 	var err error
 	var xdwdef = WorkflowDefinition{}
 	var xdwdefBytes []byte
 	var xdwfile *os.File
-	var input = config_Folder + "/" + file.Name()
+	var input = State.ConfigFolder + "/" + file.Name()
 	if xdwfile, err = os.Open(input); err == nil {
 		json.NewDecoder(xdwfile).Decode(&xdwdef)
 		if xdwdefBytes, err = json.MarshalIndent(xdwdef, "", "  "); err == nil {
@@ -1400,7 +1301,7 @@ func NewWorkflowDefinitionFromFile(file fs.DirEntry) (WorkflowDefinition, []byte
 	}
 	return xdwdef, xdwdefBytes, err
 }
-func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowDefinition) error {
+func Persist_WorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowDefinition) error {
 	var err error
 	var wfDoc []byte
 	var wfDef []byte
@@ -1418,7 +1319,7 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 	}
 	persistwf.XDW_Doc = string(wfDoc)
 	persistwf.XDW_Def = string(wfDef)
-	existingwfs := dbint.Workflows{Action: cnst.SELECT}
+	existingwfs := dbint.Workflows{Action: tukcnst.SELECT}
 	if err := dbint.NewDBEvent(&existingwfs); err != nil {
 		log.Println(err.Error())
 		return err
@@ -1427,8 +1328,8 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 		for k, exwf := range existingwfs.Workflows {
 			if k > 0 {
 				if exwf.XDW_Key == workflowdef.Ref+workflow.Patient.ID.Extension {
-					wfStr := UpdateWorkflowStatus(exwf.XDW_Doc, "CLOSED")
-					updtwfs := dbint.Workflows{Action: cnst.UPDATE}
+					wfStr := Update_WorkflowStatus(exwf.XDW_Doc, "CLOSED")
+					updtwfs := dbint.Workflows{Action: tukcnst.UPDATE}
 					updtwf := dbint.Workflow{
 						XDW_Key: exwf.XDW_Key,
 						Version: exwf.Version,
@@ -1444,14 +1345,14 @@ func PersistWorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowD
 			}
 		}
 	}
-	persistwfs := dbint.Workflows{Action: cnst.INSERT}
+	persistwfs := dbint.Workflows{Action: tukcnst.INSERT}
 	persistwfs.Workflows = append(persistwfs.Workflows, persistwf)
 	if err = dbint.NewDBEvent(&persistwfs); err != nil {
 		log.Println(err.Error())
 	}
 	return err
 }
-func UpdateWorkflowStatus(wfstr string, status string) string {
+func Update_WorkflowStatus(wfstr string, status string) string {
 	wf := XDWWorkflowDocument{}
 	if err := json.Unmarshal([]byte(wfstr), &wf); err != nil {
 		log.Println(err.Error())
@@ -1465,8 +1366,8 @@ func UpdateWorkflowStatus(wfstr string, status string) string {
 	}
 	return string(ret)
 }
-func GetActiveWorkflowEvents(pathway string, nhs string) (dbint.Events, error) {
-	evs := dbint.Events{Action: cnst.SELECT}
+func Get_ActiveWorkflowEvents(pathway string, nhs string) (dbint.Events, error) {
+	evs := dbint.Events{Action: tukcnst.SELECT}
 	ev := dbint.Event{NhsId: nhs, Pathway: pathway, Version: "0"}
 	evs.Events = append(evs.Events, ev)
 	err := dbint.NewDBEvent(&evs)
@@ -1476,44 +1377,44 @@ func Log(i interface{}) {
 	util.Log(i)
 }
 func AWS_XDWs_API_Request(i *dbint.XDWS) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+cnst.XDWS)
+	log.Printf("Sending %s Request to %s", i.Action, State.TUK_DB_URL+tukcnst.XDWS)
 	body, _ := json.Marshal(i)
-	bodyBytes, err := newAWS_APIRequest(i.Action, cnst.XDWS, body)
+	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.XDWS, body)
 	if err == nil {
 		err = json.Unmarshal(bodyBytes, &i)
 	}
 	return err
 }
 func AWS_Workflows_API_Request(i *dbint.Workflows) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+cnst.WORKFLOWS)
+	log.Printf("Sending %s Request to %s", i.Action, State.TUK_DB_URL+tukcnst.WORKFLOWS)
 	body, _ := json.Marshal(i)
-	bodyBytes, err := newAWS_APIRequest(i.Action, cnst.WORKFLOWS, body)
+	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.WORKFLOWS, body)
 	if err == nil {
 		err = json.Unmarshal(bodyBytes, &i)
 	}
 	return err
 }
 func AWS_Subscriptions_API_Request(i *dbint.Subscriptions) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+cnst.SUBSCRIPTIONS)
+	log.Printf("Sending %s Request to %s", i.Action, State.TUK_DB_URL+tukcnst.SUBSCRIPTIONS)
 	body, _ := json.Marshal(i)
-	bodyBytes, err := newAWS_APIRequest(i.Action, cnst.SUBSCRIPTIONS, body)
+	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.SUBSCRIPTIONS, body)
 	if err == nil {
 		err = json.Unmarshal(bodyBytes, &i)
 	}
 	return err
 }
 func AWS_Events_API_Request(i *dbint.Events) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+cnst.EVENTS)
+	log.Printf("Sending %s Request to %s", i.Action, State.TUK_DB_URL+tukcnst.EVENTS)
 	body, _ := json.Marshal(i)
-	bodyBytes, err := newAWS_APIRequest(i.Action, cnst.EVENTS, body)
+	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.EVENTS, body)
 	if err == nil {
 		err = json.Unmarshal(bodyBytes, &i)
 	}
 	return err
 }
-func newAWS_APIRequest(act string, resource string, body []byte) ([]byte, error) {
+func new_AWS_APIRequest(act string, resource string, body []byte) ([]byte, error) {
 	awsreq := tukhttp.AWS_APIRequest{
-		URL:      TUK_DB_URL,
+		URL:      State.TUK_DB_URL,
 		Act:      act,
 		Resource: resource,
 		Timeout:  5,

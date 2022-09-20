@@ -3,12 +3,14 @@ module github.com/ipthomas/tukint
 go 1.19
 
 require (
-	github.com/ipthomas/tukcnst v1.1.0
+	github.com/aws/aws-lambda-go v1.34.1
+	github.com/ipthomas/tukcnst v1.2.0
 	github.com/ipthomas/tukdbint v1.0.11
-	github.com/ipthomas/tukdsub v1.0.13
+	github.com/ipthomas/tukdsub v1.1.9
 	github.com/ipthomas/tukhttp v1.1.1
-	github.com/ipthomas/tukpdq v1.1.7
+	github.com/ipthomas/tukpdq v1.2.0
 	github.com/ipthomas/tukutil v1.1.1
+
 )
 
 require (

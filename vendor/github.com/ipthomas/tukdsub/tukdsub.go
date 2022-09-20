@@ -1,7 +1,6 @@
 package tukdsub
 
 import (
-	"C"
 	"bytes"
 	"encoding/xml"
 	"errors"
@@ -13,7 +12,7 @@ import (
 
 	dbint "github.com/ipthomas/tukdbint"
 	"github.com/ipthomas/tukhttp"
-	pixm "github.com/ipthomas/tukpdq"
+	tukpdq "github.com/ipthomas/tukpdq"
 	util "github.com/ipthomas/tukutil"
 )
 
@@ -256,13 +255,13 @@ func (i *DSUBEvent) newEvent() error {
 			log.Printf("TUK Event Subscriptions Count : %v", tukdbSubs.Count)
 			if tukdbSubs.Count > 0 {
 				log.Printf("Obtaining NHS ID. Using %s", i.Event.XdsPid+":"+REG_OID)
-				pdq := pixm.PDQQuery{
+				pdq := tukpdq.PDQQuery{
 					Server:     tukcnst.PIXv3,
 					REG_ID:     i.Event.XdsPid,
-					Server_URL: getCodeSystemVal(tukcnst.PIX_URL),
+					Server_URL: GetCodeSystemVal(tukcnst.PIX_URL),
 					REG_OID:    REG_OID,
 				}
-				if err = pixm.PDQ(&pdq); err != nil {
+				if err = tukpdq.PDQ(&pdq); err != nil {
 					return err
 				}
 				if pdq.Count == 0 {
@@ -465,7 +464,7 @@ func (i *DSUBSubscribe) newEvent() error {
 //	tukcnst..DSUB_ACK_TEMPLATE
 //	tukcnst..DSUB_SUBSCRIBE_TEMPLATE
 //	tukcnst..DSUB_CANCEL_TEMPLATE
-func getTemplate(name string) string {
+func GetTemplate(name string) string {
 	switch name {
 	case tukcnst.DSUB_ACK_TEMPLATE:
 		return DSUB_ACK_TEMPLATE
@@ -484,7 +483,7 @@ func getTemplate(name string) string {
 //	tukcnst..DSUB_CANCEL_TEMPLATE
 //
 // The input string dsubTemplate is a 'url safe' string of the template
-func setTemplate(name string, dsubTemplate string) {
+func SetTemplate(name string, dsubTemplate string) {
 	switch name {
 	case tukcnst.DSUB_ACK_TEMPLATE:
 		DSUB_ACK_TEMPLATE = dsubTemplate
@@ -496,68 +495,9 @@ func setTemplate(name string, dsubTemplate string) {
 }
 
 // GetCodeSystemVal returns the value associated with the input string value. The codesystem is initialised from the tukutil.Codesystem and the dsub codesystem (if set by SetCodesystem(cs) )
-func getCodeSystemVal(key string) string {
+func GetCodeSystemVal(key string) string {
 	if val, ok := CS[key]; ok {
 		return val
 	}
 	return key
-}
-
-// functions to support the build of C header / output files
-
-// CGOGetCodeSystemVal supports the build of a C Header / Output for go method GetCodeSystemVal(key)
-//
-//export CGOGetCodeSystemVal
-func CGOGetCodeSystemVal(key string) string {
-	return getCodeSystemVal(key)
-}
-
-// CGOSetCodeSystemVal supports the build of a C sharp Header / Output for go method CodeSystem(key) = val
-//
-//export CGOSetCodeSystemVal
-func CGOSetCodeSystemVal(key string, val string) {
-	CS[key] = val
-}
-
-// CGOSetTemplate supports the build of a C sharp Header / Output for go method SetTemplate(name,tmplt)
-//
-//export CGOSetTemplate
-func CGOSetTemplate(name string, tmplt string) {
-	setTemplate(name, tmplt)
-}
-
-// CGOGetTemplate supports the build of a C sharp Header / Output for go method GetTemplate(name)
-//
-//export CGOGetTemplate
-func CGOGetTemplate(name string) {
-	getTemplate(name)
-}
-
-// CGONewDSUBCancel supports the build of a C sharp Header / Output for go method DSUBCancel.NewEvent()
-//
-//export CGONewDSUBCancel
-func CGONewDSUBCancel(brokerref string, uuid string) {
-	dsubcancel := DSUBCancel{
-		BrokerRef: brokerref,
-		UUID:      uuid,
-	}
-	dsubcancel.newEvent()
-}
-
-//export CGONewDSUBAck
-func CGONewDSUBAck() {
-	dsubAck := DSUBAck{}
-	dsubAck.newEvent()
-}
-
-//export CGONewSubscription
-func CGONewSubscription(brokerurl string, consumerurl string, topic string, expression string) string {
-	sub := DSUBSubscribe{
-		BrokerUrl:   brokerurl,
-		ConsumerUrl: consumerurl,
-		Topic:       topic,
-		Expression:  expression,
-	}
-	sub.newEvent()
-	return sub.BrokerRef
 }
