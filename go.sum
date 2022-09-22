@@ -9,6 +9,10 @@ github.com/ipthomas/tukcnst v1.1.0 h1:e2JBTrJt1x9xFwJL6w20y3HR02YOdpH5ZdoGG+9qjD
 github.com/ipthomas/tukcnst v1.1.0/go.mod h1:ciOdJbw8hryjilsWjN0vhtF3ZbSfEKUd7wfzU0IZ2X8=
 github.com/ipthomas/tukcnst v1.2.0 h1:UbB/VWtf0WUaR7eIxwvtHOxMLuXsc5bL+VAc7AuAoKg=
 github.com/ipthomas/tukcnst v1.2.0/go.mod h1:ciOdJbw8hryjilsWjN0vhtF3ZbSfEKUd7wfzU0IZ2X8=
+github.com/ipthomas/tukcnst v1.2.1 h1:W8CYARm6SWyjJg495Y8ae1mJWDyrsrrd9Lv+1ckNW68=
+github.com/ipthomas/tukcnst v1.2.1/go.mod h1:ciOdJbw8hryjilsWjN0vhtF3ZbSfEKUd7wfzU0IZ2X8=
+github.com/ipthomas/tukcnst v1.2.2 h1:U1q7J+54k2/WTeV6r/UDrBl1K2/asKVvWIZ0bYZBo8o=
+github.com/ipthomas/tukcnst v1.2.2/go.mod h1:ciOdJbw8hryjilsWjN0vhtF3ZbSfEKUd7wfzU0IZ2X8=
 github.com/ipthomas/tukdbint v1.0.11 h1:L8M/b6KUNfO2pw3h6GY1dLNZ4STO32x08VyBOA3Tchs=
 github.com/ipthomas/tukdbint v1.0.11/go.mod h1:dIFan9YXW7j47Jo8EuI/1EtcXCQmZoWz7QOWdnc2+JE=
 github.com/ipthomas/tukdbint v1.2.1 h1:Vl7J3twahXWA+Ln2uL0wwBjHzFWR2PRfIY4+P3z88lc=
