@@ -376,7 +376,7 @@ func (i *TukiPDQ) new_Trans() error {
 			}
 		}
 	}
-	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] != "false" {
+	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] == "true" {
 		if cachepat, ok := cachedpatients[pdq.Used_PID]; ok {
 			log.Printf("Cached Patient found for Patient ID %s", pdq.Used_PID)
 			i.TukPDQ.Count = 1
@@ -392,7 +392,9 @@ func (i *TukiPDQ) new_Trans() error {
 			return nil
 		}
 	}
+	log.Printf("Initiating PDQ request to %s %s", pdq.Server, pdq.Server_URL)
 	err := tukpdq.PDQ(&pdq)
+	log.Printf("Processing Response - Is Err = %v %s", err != nil,err.Error()s)
 	i.TukPDQ = pdq
 	if i.TukPDQ.Count < 1 {
 		i.TukPDQ.StatusCode = http.StatusOK
