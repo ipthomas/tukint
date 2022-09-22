@@ -392,9 +392,13 @@ func (i *TukiPDQ) new_Trans() error {
 			return nil
 		}
 	}
-	log.Printf("Initiating PDQ request to %s %s", pdq.Server, pdq.Server_URL)
+	log.Printf("Initiating PDQ request to %s %s using pid %s oid %s", pdq.Server, pdq.Server_URL, pdq.Used_PID, pdq.Used_PID_OID)
 	err := tukpdq.PDQ(&pdq)
+	if err != nil {
+		log.Println(err.Error())
+	}
 	i.TukPDQ = pdq
+	log.Printf("Patients returned = %v", i.TukPDQ.Count)
 	if i.TukPDQ.Count < 1 {
 		i.TukPDQ.StatusCode = http.StatusOK
 		switch i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
