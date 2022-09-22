@@ -394,7 +394,6 @@ func (i *TukiPDQ) new_Trans() error {
 	}
 	log.Printf("Initiating PDQ request to %s %s", pdq.Server, pdq.Server_URL)
 	err := tukpdq.PDQ(&pdq)
-	log.Printf("Processing Response - Is Err = %v %s", err != nil, err.Error())
 	i.TukPDQ = pdq
 	if i.TukPDQ.Count < 1 {
 		i.TukPDQ.StatusCode = http.StatusOK
