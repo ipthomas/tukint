@@ -301,16 +301,13 @@ type TukiPDQ struct {
 	TukPDQ      tukpdq.PDQQuery
 }
 type Env_Vars struct {
-	Reg_OID            string
-	NHS_OID            string
-	TUK_DB_URL         string
-	DSUB_Broker_URL    string
-	DSUB_Consumer_URL  string
-	PIXM_Server_URL    string
-	PIXV3_Server_URL   string
-	PDQV3_Server_URL   string
-	PDQ_Server_URL     string
-	PDQ_Server_Default string
+	Reg_OID           string
+	NHS_OID           string
+	TUK_DB_URL        string
+	DSUB_Broker_URL   string
+	DSUB_Consumer_URL string
+	PDQ_Server_URL    string
+	PDQ_Server_Type   string
 }
 
 var (
@@ -325,15 +322,13 @@ var (
 )
 
 func init() {
-	EnvVars.DSUB_Broker_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_BROKER)
-	EnvVars.DSUB_Consumer_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_CONSUMER)
+	EnvVars.DSUB_Broker_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_BROKER_URL)
+	EnvVars.DSUB_Consumer_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_CONSUMER_URL)
 	EnvVars.NHS_OID = os.Getenv(tukcnst.AWS_ENV_NHS_OID)
-	EnvVars.PDQ_Server_Default = strings.ToLower(os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_DEFAULT))
+	EnvVars.PDQ_Server_Type = strings.ToLower(os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_TYPE))
+	EnvVars.PDQ_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_URL)
 	EnvVars.Reg_OID = os.Getenv(tukcnst.AWS_ENV_REG_OID)
-	EnvVars.TUK_DB_URL = os.Getenv(tukcnst.AWS_ENV_TUK_DB)
-	EnvVars.PDQV3_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PDQV3)
-	EnvVars.PIXM_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PIXM)
-	EnvVars.PIXV3_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PIXV3)
+	EnvVars.TUK_DB_URL = os.Getenv(tukcnst.AWS_ENV_TUK_DB_URL)
 }
 
 type TukInterface interface {
@@ -347,19 +342,11 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 	if req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID] != "" {
 		EnvVars.NHS_OID = req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID]
 	}
-	if req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER] != "" {
-		EnvVars.PDQ_Server_Default = strings.ToLower(req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER])
-	}
-	switch EnvVars.PDQ_Server_Default {
-	case tukcnst.PIXm:
-		EnvVars.PDQ_Server_URL = EnvVars.PIXM_Server_URL
-	case tukcnst.PIXv3:
-		EnvVars.PDQ_Server_URL = EnvVars.PIXV3_Server_URL
-	case tukcnst.PDQv3:
-		EnvVars.PDQ_Server_URL = EnvVars.PDQV3_Server_URL
+	if req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER_TYPE] != "" {
+		EnvVars.PDQ_Server_Type = strings.ToLower(req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER_TYPE])
 	}
 	pdq := tukpdq.PDQQuery{
-		Server:     EnvVars.PDQ_Server_Default,
+		Server:     EnvVars.PDQ_Server_Type,
 		MRN_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_ID],
 		MRN_OID:    req.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_OID],
 		NHS_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_ID],
@@ -553,7 +540,7 @@ func (req *ClientRequest) Process_ClientRequest() string {
 func (i *ClientRequest) New_PatientRequest() string {
 
 	query := tukpdq.PDQQuery{
-		Server:     tukcnst.PIXm,
+		Server:     EnvVars.PDQ_Server_Type,
 		Server_URL: EnvVars.PDQ_Server_URL,
 		NHS_ID:     i.NHS_ID,
 		REG_OID:    i.REG_OID,
@@ -648,7 +635,7 @@ func (i *ClientRequest) New_WorkflowsRequest() string {
 			}
 			log.Printf("Initialised Workflow definition for Workflow document %s", xdwdef.Ref)
 			query := tukpdq.PDQQuery{
-				Server:     tukcnst.PIXm,
+				Server:     EnvVars.PDQ_Server_Type,
 				Server_URL: EnvVars.PDQ_Server_URL,
 				NHS_ID:     i.NHS_ID,
 				REG_OID:    i.REG_OID,
