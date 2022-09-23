@@ -308,6 +308,8 @@ type Env_Vars struct {
 	DSUB_Consumer_URL string
 	PDQ_Server_URL    string
 	PDQ_Server_Type   string
+	Patient_Cache     bool
+	Rsp_Type          string
 }
 
 var (
@@ -329,6 +331,8 @@ func init() {
 	EnvVars.PDQ_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_URL)
 	EnvVars.Reg_OID = os.Getenv(tukcnst.AWS_ENV_REG_OID)
 	EnvVars.TUK_DB_URL = os.Getenv(tukcnst.AWS_ENV_TUK_DB_URL)
+	EnvVars.Patient_Cache, _ = strconv.ParseBool(os.Getenv(tukcnst.AWS_ENV_PATIENT_CACHE))
+	EnvVars.Rsp_Type = os.Getenv(tukcnst.AWS_ENV_RESPONSE_TYPE)
 }
 
 type TukInterface interface {
@@ -344,6 +348,12 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 	}
 	if req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER_TYPE] != "" {
 		EnvVars.PDQ_Server_Type = strings.ToLower(req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER_TYPE])
+	}
+	if req.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] != "" {
+		EnvVars.Patient_Cache, _ = strconv.ParseBool(req.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE])
+	}
+	if req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] != "" {
+		EnvVars.Rsp_Type = req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE]
 	}
 	pdq := tukpdq.PDQQuery{
 		Server:     EnvVars.PDQ_Server_Type,
@@ -369,10 +379,10 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 			}
 		}
 	}
-	if req.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] == "true" {
+	if EnvVars.Patient_Cache {
 		if cachepat, ok := cachedpatients[pdq.Used_PID]; ok {
 			log.Printf("Cached Patient found for Patient ID %s", pdq.Used_PID)
-			switch req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
+			switch EnvVars.Rsp_Type {
 			case "bool":
 				return handle_Response("true", http.StatusOK, nil)
 			case "code":
@@ -386,7 +396,10 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 	if err := tukpdq.PDQ(&pdq); err == nil {
 		log.Printf("Number of Patients Returned = %v", pdq.Count)
 		if pdq.Count > 0 {
-			switch req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
+			if EnvVars.Patient_Cache {
+				cachedpatients[pdq.Used_PID] = pdq.Response
+			}
+			switch EnvVars.Rsp_Type {
 			case "bool":
 				return handle_Response("true", http.StatusOK, nil)
 			case "code":
@@ -395,7 +408,7 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 				return handle_Response(string(pdq.Response), http.StatusOK, nil)
 			}
 		} else {
-			switch req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
+			switch EnvVars.Rsp_Type {
 			case "bool":
 				return handle_Response("false", http.StatusOK, nil)
 			case "code":
