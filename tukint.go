@@ -297,26 +297,25 @@ type TukAuthors struct {
 	Author []TukAuthor `json:"authors"`
 }
 type TukiPDQ struct {
-	PIXm_Server_URL    string
-	PIXv3_Server_URL   string
-	PDQv3_Server_URL   string
-	PDQ_Server_URL     string
-	PDQ_Server_Default string
+	AWS_Request events.APIGatewayProxyRequest
+	TukPDQ      tukpdq.PDQQuery
+}
+type Env_Vars struct {
 	Reg_OID            string
 	NHS_OID            string
-	AWS_Request        events.APIGatewayProxyRequest
-	TukPDQ             tukpdq.PDQQuery
+	TUK_DB_URL         string
+	DSUB_Broker_URL    string
+	DSUB_Consumer_URL  string
+	PIXM_Server_URL    string
+	PIXV3_Server_URL   string
+	PDQV3_Server_URL   string
+	PDQ_Server_URL     string
+	PDQ_Server_Default string
 }
 
 var (
-	TUK_DB_URL                         = ""
-	DSUB_Broker_URL                    = ""
-	DSUB_Consumer_URL                  = ""
-	PDQ_Server_URL                     = ""
+	EnvVars                            = Env_Vars{}
 	TUK_HTTP_SERVER_URL                = ""
-	PDQ_Server_Default                 = ""
-	REG_OID                            = ""
-	NHS_OID                            = ""
 	HtmlTemplates                      *template.Template
 	XmlTemplates                       *template.Template
 	LogFile                            *os.File
@@ -325,6 +324,18 @@ var (
 	cachedpatients                     = make(map[string][]byte)
 )
 
+func init() {
+	EnvVars.DSUB_Broker_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_BROKER)
+	EnvVars.DSUB_Consumer_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_CONSUMER)
+	EnvVars.NHS_OID = os.Getenv(tukcnst.AWS_ENV_NHS_OID)
+	EnvVars.PDQ_Server_Default = strings.ToLower(os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_DEFAULT))
+	EnvVars.Reg_OID = os.Getenv(tukcnst.AWS_ENV_REG_OID)
+	EnvVars.TUK_DB_URL = os.Getenv(tukcnst.AWS_ENV_TUK_DB)
+	EnvVars.PDQV3_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PDQV3)
+	EnvVars.PIXM_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PIXM)
+	EnvVars.PIXV3_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_PIXV3)
+}
+
 type TukInterface interface {
 	new_Trans() error
 }
@@ -332,35 +343,30 @@ type TukInterface interface {
 func New_Transaction(i TukInterface) error {
 	return i.new_Trans()
 }
-func (i *TukiPDQ) new_Trans() error {
-	REG_OID = i.Reg_OID
-	NHS_OID = i.NHS_OID
-	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID] != "" {
-		NHS_OID = i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID]
+func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
+	if req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID] != "" {
+		EnvVars.NHS_OID = req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID]
 	}
-	PDQ_Server_Default = i.PDQ_Server_Default
-	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER] != "" {
-		PDQ_Server_Default = strings.ToLower(i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER])
+	if req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER] != "" {
+		EnvVars.PDQ_Server_Default = strings.ToLower(req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER])
 	}
-	switch PDQ_Server_Default {
+	switch EnvVars.PDQ_Server_Default {
 	case tukcnst.PIXm:
-		PDQ_Server_URL = i.PIXm_Server_URL
-	case tukcnst.PDQv3:
-		PDQ_Server_URL = i.PDQv3_Server_URL
+		EnvVars.PDQ_Server_URL = EnvVars.PIXM_Server_URL
 	case tukcnst.PIXv3:
-		PDQ_Server_URL = i.PIXv3_Server_URL
-	default:
-		PDQ_Server_URL = i.PIXv3_Server_URL
+		EnvVars.PDQ_Server_URL = EnvVars.PIXV3_Server_URL
+	case tukcnst.PDQv3:
+		EnvVars.PDQ_Server_URL = EnvVars.PDQV3_Server_URL
 	}
 	pdq := tukpdq.PDQQuery{
-		Server:     PDQ_Server_Default,
-		MRN_ID:     i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_ID],
-		MRN_OID:    i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_OID],
-		NHS_ID:     i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_ID],
-		NHS_OID:    NHS_OID,
-		REG_ID:     i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_REG_ID],
-		REG_OID:    REG_OID,
-		Server_URL: PDQ_Server_URL,
+		Server:     EnvVars.PDQ_Server_Default,
+		MRN_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_ID],
+		MRN_OID:    req.QueryStringParameters[tukcnst.QUERY_PARAM_MRN_OID],
+		NHS_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_ID],
+		NHS_OID:    EnvVars.NHS_OID,
+		REG_ID:     req.QueryStringParameters[tukcnst.QUERY_PARAM_REG_ID],
+		REG_OID:    EnvVars.Reg_OID,
+		Server_URL: EnvVars.PDQ_Server_URL,
 	}
 	if pdq.MRN_ID != "" && pdq.MRN_OID != "" {
 		pdq.Used_PID = pdq.MRN_ID
@@ -376,54 +382,54 @@ func (i *TukiPDQ) new_Trans() error {
 			}
 		}
 	}
-	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] == "true" {
+	if req.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] == "true" {
 		if cachepat, ok := cachedpatients[pdq.Used_PID]; ok {
 			log.Printf("Cached Patient found for Patient ID %s", pdq.Used_PID)
-			i.TukPDQ.Count = 1
-			i.TukPDQ.StatusCode = http.StatusOK
-			if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] == "bool" {
-				i.TukPDQ.Response = []byte("true")
-				return nil
+			switch req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
+			case "bool":
+				return handle_Response("true", http.StatusOK, nil)
+			case "code":
+				return handle_Response("", http.StatusOK, nil)
+			default:
+				return handle_Response(string(cachepat), http.StatusOK, nil)
 			}
-			if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] == "code" {
-				return nil
-			}
-			i.TukPDQ.Response = cachepat
-			return nil
 		}
 	}
 	log.Printf("Initiating PDQ request to %s %s using pid %s oid %s", pdq.Server, pdq.Server_URL, pdq.Used_PID, pdq.Used_PID_OID)
-	err := tukpdq.PDQ(&pdq)
-	if err != nil {
-		log.Println(err.Error())
-	}
-	i.TukPDQ = pdq
-	log.Printf("Patients returned = %v", i.TukPDQ.Count)
-	if i.TukPDQ.Count < 1 {
-		i.TukPDQ.StatusCode = http.StatusOK
-		switch i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
-		case "bool":
-			i.TukPDQ.Response = []byte("false")
-		case "code":
-			i.TukPDQ.Response = []byte("")
-			i.TukPDQ.StatusCode = http.StatusNoContent
-		default:
-			i.TukPDQ.Response = []byte("No Patient Found")
+	if err := tukpdq.PDQ(&pdq); err == nil {
+		log.Printf("Number of Patients Returned = %v", pdq.Count)
+		if pdq.Count > 0 {
+			switch req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
+			case "bool":
+				return handle_Response("true", http.StatusOK, nil)
+			case "code":
+				return handle_Response("", http.StatusOK, nil)
+			default:
+				return handle_Response(string(pdq.Response), http.StatusOK, nil)
+			}
+		} else {
+			switch req.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] {
+			case "bool":
+				return handle_Response("false", http.StatusOK, nil)
+			case "code":
+				return handle_Response("", http.StatusNoContent, nil)
+			default:
+				return handle_Response("No Patient Found", http.StatusOK, nil)
+			}
 		}
-		return err
+
+	} else {
+		log.Println(err.Error())
+		return handle_Response(err.Error(), pdq.StatusCode, err)
 	}
-	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] == "true" {
-		cachedpatients[i.TukPDQ.Used_PID] = i.TukPDQ.Response
-	}
-	log.Printf("Patient ID %s is Registered", i.TukPDQ.Used_PID)
-	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] == "bool" {
-		i.TukPDQ.Response = []byte("true")
-	}
-	if i.AWS_Request.QueryStringParameters[tukcnst.QUERY_PARAM_RESPONSE_TYPE] == "code" {
-		i.TukPDQ.Response = []byte("")
-	}
-	return err
 }
+func handle_Response(body string, status int, err error) (*events.APIGatewayProxyResponse, error) {
+	resp := events.APIGatewayProxyResponse{MultiValueHeaders: map[string][]string{}, IsBase64Encoded: false}
+	resp.StatusCode = status
+	resp.Body = body
+	return &resp, err
+}
+
 func Set_Home_Community(homeCommunityId string) {
 	HOME_COMMUNITY_ID = homeCommunityId
 }
@@ -467,7 +473,7 @@ func NewHTTPServer(basefolder string, logfolder string, configfolder string, tem
 }
 func (i *TukHttpServer) NewHTTPServer() {
 	TUK_HTTP_SERVER_URL = i.Http_Scheme + i.Hostname + i.Port + i.BaseResourceUrl
-	PDQ_Server_URL = i.PDQ_Server_URL
+	EnvVars.PDQ_Server_URL = i.PDQ_Server_URL
 	if err := Load_Templates(i.TemplateFolder); err != nil {
 		log.Println(err.Error())
 		return
@@ -548,7 +554,7 @@ func (i *ClientRequest) New_PatientRequest() string {
 
 	query := tukpdq.PDQQuery{
 		Server:     tukcnst.PIXm,
-		Server_URL: PDQ_Server_URL,
+		Server_URL: EnvVars.PDQ_Server_URL,
 		NHS_ID:     i.NHS_ID,
 		REG_OID:    i.REG_OID,
 	}
@@ -643,7 +649,7 @@ func (i *ClientRequest) New_WorkflowsRequest() string {
 			log.Printf("Initialised Workflow definition for Workflow document %s", xdwdef.Ref)
 			query := tukpdq.PDQQuery{
 				Server:     tukcnst.PIXm,
-				Server_URL: PDQ_Server_URL,
+				Server_URL: EnvVars.PDQ_Server_URL,
 				NHS_ID:     i.NHS_ID,
 				REG_OID:    i.REG_OID,
 			}
@@ -843,7 +849,7 @@ func New_XDWContentUpdator(i *tukdbint.Event, wfdef WorkflowDefinition, wf XDWWo
 					wf.TaskList.XDWTask[k].TaskData.TaskDetails.ActualOwner = ev.User + " " + ev.Org + " " + ev.Role
 					if strings.HasSuffix(wfdoctask.TaskData.Input[inp].Part.AttachmentInfo.AccessType, "XDSregistered") {
 						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.Identifier = ev.RepositoryUniqueId + ":" + ev.XdsDocEntryUid
-						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.HomeCommunityId = REG_OID
+						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.HomeCommunityId = EnvVars.Reg_OID
 						wf.New_WorkflowTaskEvent(ev, k)
 					} else {
 						wf.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.Identifier = strconv.Itoa(int(ev.EventId))
@@ -863,7 +869,7 @@ func New_XDWContentUpdator(i *tukdbint.Event, wfdef WorkflowDefinition, wf XDWWo
 					wf.TaskList.XDWTask[k].TaskData.TaskDetails.Status = "IN_PROGRESS"
 					if strings.HasSuffix(wfdoctask.TaskData.Output[oup].Part.AttachmentInfo.AccessType, "XDSregistered") {
 						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.Identifier = ev.RepositoryUniqueId + ":" + ev.XdsDocEntryUid
-						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.HomeCommunityId = REG_OID
+						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.HomeCommunityId = EnvVars.Reg_OID
 						wf.New_WorkflowTaskEvent(ev, k)
 					} else {
 						wf.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.Identifier = strconv.Itoa(int(ev.EventId))
@@ -1229,8 +1235,8 @@ func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (tuk
 		log.Printf("Creating Broker Subscription for %s workflow expression %s", pwy, exp)
 
 		sub := tukdsub.DSUBSubscribe{
-			BrokerUrl:   DSUB_Broker_URL,
-			ConsumerUrl: DSUB_Consumer_URL,
+			BrokerUrl:   EnvVars.DSUB_Broker_URL,
+			ConsumerUrl: EnvVars.DSUB_Consumer_URL,
 			Topic:       tukcnst.DSUB_TOPIC_TYPE_CODE,
 			Expression:  exp,
 		}
@@ -1414,7 +1420,7 @@ func Log(i interface{}) {
 	tukutil.Log(i)
 }
 func AWS_XDWs_API_Request(i *tukdbint.XDWS) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+tukcnst.XDWS)
+	log.Printf("Sending %s Request to %s", i.Action, EnvVars.TUK_DB_URL+tukcnst.XDWS)
 	body, _ := json.Marshal(i)
 	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.XDWS, body)
 	if err == nil {
@@ -1423,7 +1429,7 @@ func AWS_XDWs_API_Request(i *tukdbint.XDWS) error {
 	return err
 }
 func AWS_Workflows_API_Request(i *tukdbint.Workflows) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+tukcnst.WORKFLOWS)
+	log.Printf("Sending %s Request to %s", i.Action, EnvVars.TUK_DB_URL+tukcnst.WORKFLOWS)
 	body, _ := json.Marshal(i)
 	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.WORKFLOWS, body)
 	if err == nil {
@@ -1432,7 +1438,7 @@ func AWS_Workflows_API_Request(i *tukdbint.Workflows) error {
 	return err
 }
 func AWS_Subscriptions_API_Request(i *tukdbint.Subscriptions) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+tukcnst.SUBSCRIPTIONS)
+	log.Printf("Sending %s Request to %s", i.Action, EnvVars.TUK_DB_URL+tukcnst.SUBSCRIPTIONS)
 	body, _ := json.Marshal(i)
 	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.SUBSCRIPTIONS, body)
 	if err == nil {
@@ -1441,7 +1447,7 @@ func AWS_Subscriptions_API_Request(i *tukdbint.Subscriptions) error {
 	return err
 }
 func AWS_Events_API_Request(i *tukdbint.Events) error {
-	log.Printf("Sending %s Request to %s", i.Action, TUK_DB_URL+tukcnst.EVENTS)
+	log.Printf("Sending %s Request to %s", i.Action, EnvVars.TUK_DB_URL+tukcnst.EVENTS)
 	body, _ := json.Marshal(i)
 	bodyBytes, err := new_AWS_APIRequest(i.Action, tukcnst.EVENTS, body)
 	if err == nil {
@@ -1451,7 +1457,7 @@ func AWS_Events_API_Request(i *tukdbint.Events) error {
 }
 func new_AWS_APIRequest(act string, resource string, body []byte) ([]byte, error) {
 	awsreq := tukhttp.AWS_APIRequest{
-		URL:      TUK_DB_URL,
+		URL:      EnvVars.TUK_DB_URL,
 		Act:      act,
 		Resource: resource,
 		Timeout:  5,
