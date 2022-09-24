@@ -298,15 +298,22 @@ type TukAuthors struct {
 }
 
 type Env_Vars struct {
-	Reg_OID           string
-	NHS_OID           string
-	TUK_DB_URL        string
-	DSUB_Broker_URL   string
-	DSUB_Consumer_URL string
-	PDQ_Server_URL    string
-	PDQ_Server_Type   string
-	Patient_Cache     bool
-	Rsp_Type          string
+	Reg_OID                 string
+	NHS_OID                 string
+	TUK_DB_URL              string
+	TUK_DB_Host             string
+	TUK_DB_Name             string
+	TUK_DB_User             string
+	TUK_DB_Password         string
+	DSUB_Broker_URL         string
+	DSUB_Consumer_URL       string
+	DSUB_ACK_TEMPLATE       string
+	DSUB_SUBSCRIBE_TEMPLATE string
+	DSUB_CANCEL_TEMPLATE    string
+	PDQ_Server_URL          string
+	PDQ_Server_Type         string
+	Patient_Cache           bool
+	Rsp_Type                string
 }
 
 var (
@@ -323,11 +330,18 @@ var (
 func init() {
 	EnvVars.DSUB_Broker_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_BROKER_URL)
 	EnvVars.DSUB_Consumer_URL = os.Getenv(tukcnst.AWS_ENV_DSUB_CONSUMER_URL)
+	EnvVars.DSUB_ACK_TEMPLATE = os.Getenv(tukcnst.DSUB_ACK_TEMPLATE)
+	EnvVars.DSUB_SUBSCRIBE_TEMPLATE = os.Getenv(tukcnst.DSUB_SUBSCRIBE_TEMPLATE)
+	EnvVars.DSUB_CANCEL_TEMPLATE = os.Getenv(tukcnst.DSUB_CANCEL_TEMPLATE)
 	EnvVars.NHS_OID = os.Getenv(tukcnst.AWS_ENV_NHS_OID)
 	EnvVars.PDQ_Server_Type = strings.ToLower(os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_TYPE))
 	EnvVars.PDQ_Server_URL = os.Getenv(tukcnst.AWS_ENV_PDQ_SERVER_URL)
 	EnvVars.Reg_OID = os.Getenv(tukcnst.AWS_ENV_REG_OID)
 	EnvVars.TUK_DB_URL = os.Getenv(tukcnst.AWS_ENV_TUK_DB_URL)
+	EnvVars.TUK_DB_Host = os.Getenv(tukcnst.AWS_ENV_DB_HOST)
+	EnvVars.TUK_DB_Name = os.Getenv(tukcnst.AWS_ENV_DB_NAME)
+	EnvVars.TUK_DB_Password = os.Getenv(tukcnst.AWS_ENV_DB_PASSWORD)
+	EnvVars.TUK_DB_User = os.Getenv(tukcnst.AWS_ENV_DB_USER)
 	EnvVars.Patient_Cache, _ = strconv.ParseBool(os.Getenv(tukcnst.AWS_ENV_PATIENT_CACHE))
 	EnvVars.Rsp_Type = os.Getenv(tukcnst.AWS_ENV_RESPONSE_TYPE)
 }
@@ -414,8 +428,9 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 	}
 }
 func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
-	dsubEvent := tukdsub.DSUBEvent{Message: req.Body}
-	if err := tukdsub.NewDsubEvent(&dsubEvent); err != nil {
+	dbconn := tukdbint.TukDBConnection{DB_URL: EnvVars.TUK_DB_URL}
+	dsubEvent := tukdsub.DSUBEvent{Action: tukcnst.CREATE, Message: req.Body, TUK_DB_Connection: dbconn}
+	if err := tukdsub.NewEvent(&dsubEvent); err != nil {
 		return aws_Response(err.Error(), http.StatusInternalServerError, err)
 	}
 	return aws_Response(string(dsubEvent.Response), http.StatusOK, nil)
@@ -1229,12 +1244,12 @@ func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (tuk
 		log.Printf("Creating Broker Subscription for %s workflow expression %s", pwy, exp)
 
 		sub := tukdsub.DSUBSubscribe{
-			BrokerUrl:   EnvVars.DSUB_Broker_URL,
-			ConsumerUrl: EnvVars.DSUB_Consumer_URL,
+			BrokerURL:   EnvVars.DSUB_Broker_URL,
+			ConsumerURL: EnvVars.DSUB_Consumer_URL,
 			Topic:       tukcnst.DSUB_TOPIC_TYPE_CODE,
 			Expression:  exp,
 		}
-		if err = tukdsub.NewDsubEvent(&sub); err != nil {
+		if err = tukdsub.NewEvent(&sub); err != nil {
 			return rspSubs, err
 		}
 		if sub.BrokerRef != "" {
