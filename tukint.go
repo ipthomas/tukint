@@ -296,10 +296,7 @@ type TukAuthor struct {
 type TukAuthors struct {
 	Author []TukAuthor `json:"authors"`
 }
-type TukiPDQ struct {
-	AWS_Request events.APIGatewayProxyRequest
-	TukPDQ      tukpdq.PDQQuery
-}
+
 type Env_Vars struct {
 	Reg_OID           string
 	NHS_OID           string
@@ -335,13 +332,6 @@ func init() {
 	EnvVars.Rsp_Type = os.Getenv(tukcnst.AWS_ENV_RESPONSE_TYPE)
 }
 
-type TukInterface interface {
-	new_Trans() error
-}
-
-func New_Transaction(i TukInterface) error {
-	return i.new_Trans()
-}
 func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	if req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID] != "" {
 		EnvVars.NHS_OID = req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID]
@@ -384,11 +374,11 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 			log.Printf("Cached Patient found for Patient ID %s", pdq.Used_PID)
 			switch EnvVars.Rsp_Type {
 			case "bool":
-				return handle_Response("true", http.StatusOK, nil)
+				return aws_Response("true", http.StatusOK, nil)
 			case "code":
-				return handle_Response("", http.StatusOK, nil)
+				return aws_Response("", http.StatusOK, nil)
 			default:
-				return handle_Response(string(cachepat), http.StatusOK, nil)
+				return aws_Response(string(cachepat), http.StatusOK, nil)
 			}
 		}
 	}
@@ -401,29 +391,36 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 			}
 			switch EnvVars.Rsp_Type {
 			case "bool":
-				return handle_Response("true", http.StatusOK, nil)
+				return aws_Response("true", http.StatusOK, nil)
 			case "code":
-				return handle_Response("", http.StatusOK, nil)
+				return aws_Response("", http.StatusOK, nil)
 			default:
-				return handle_Response(string(pdq.Response), http.StatusOK, nil)
+				return aws_Response(string(pdq.Response), http.StatusOK, nil)
 			}
 		} else {
 			switch EnvVars.Rsp_Type {
 			case "bool":
-				return handle_Response("false", http.StatusOK, nil)
+				return aws_Response("false", http.StatusOK, nil)
 			case "code":
-				return handle_Response("", http.StatusNoContent, nil)
+				return aws_Response("", http.StatusNoContent, nil)
 			default:
-				return handle_Response("No Patient Found", http.StatusOK, nil)
+				return aws_Response("No Patient Found", http.StatusOK, nil)
 			}
 		}
 
 	} else {
 		log.Println(err.Error())
-		return handle_Response(err.Error(), pdq.StatusCode, err)
+		return aws_Response(err.Error(), pdq.StatusCode, err)
 	}
 }
-func handle_Response(body string, status int, err error) (*events.APIGatewayProxyResponse, error) {
+func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
+	dsubEvent := tukdsub.DSUBEvent{Message: req.Body}
+	if err := tukdsub.NewDsubEvent(&dsubEvent); err != nil {
+		return aws_Response(err.Error(), http.StatusInternalServerError, err)
+	}
+	return aws_Response(string(dsubEvent.Response), http.StatusOK, nil)
+}
+func aws_Response(body string, status int, err error) (*events.APIGatewayProxyResponse, error) {
 	resp := events.APIGatewayProxyResponse{MultiValueHeaders: map[string][]string{}, IsBase64Encoded: false}
 	resp.StatusCode = status
 	resp.Body = body
@@ -770,10 +767,7 @@ func (i *ClientRequest) New_DashboardRequest() string {
 	}
 	return b.String()
 }
-func (i *EventMessage) New_DSUBBrokerEvent() error {
-	dsubEvent := tukdsub.DSUBEvent{Message: i.Message}
-	return tukdsub.NewDsubEvent(&dsubEvent)
-}
+
 func Update_Workflow(i *tukdbint.Event, pat tukpdq.PIXPatient) {
 	log.Printf("Updating %s Workflow for patient %s %s %s", i.Pathway, pat.GivenName, pat.FamilyName, i.NhsId)
 	tukwfdefs := tukdbint.XDWS{Action: tukcnst.SELECT}
