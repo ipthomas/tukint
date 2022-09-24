@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/aws/aws-lambda-go v1.34.1
-	github.com/ipthomas/tukcnst v1.2.3
+	github.com/ipthomas/tukcnst v1.2.4
 	github.com/ipthomas/tukdbint v1.2.3
 	github.com/ipthomas/tukdsub v1.2.4
 	github.com/ipthomas/tukhttp v1.2.1
