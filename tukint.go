@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"html/template"
 	"io/fs"
 	"log"
@@ -435,6 +434,8 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 	}
 }
 func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
+	var err error
+
 	dbconn := tukdbint.TukDBConnection{
 		DBUser:        EnvVars.TUK_DB_User,
 		DBPassword:    EnvVars.TUK_DB_Password,
@@ -444,6 +445,7 @@ func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse
 		DB_URL:        EnvVars.TUK_DB_URL,
 		DBReader_Only: false,
 	}
+
 	dsubEvent := tukdsub.DSUBEvent{
 		Action:                  tukcnst.CREATE,
 		TUK_DB_Connection:       dbconn,
@@ -458,10 +460,40 @@ func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse
 		NHS_OID:                 EnvVars.NHS_OID,
 		Message:                 req.Body,
 	}
-	if err := tukdsub.NewEvent(&dsubEvent); err != nil {
-		return aws_Response(err.Error(), http.StatusInternalServerError, err)
+	switch req.Resource {
+	case tukcnst.XDW:
+		switch req.HTTPMethod {
+		case http.MethodPost:
+			log.Println("Processing POST XDW request")
+			var subs tukdbint.Subscriptions
+			var subsbytes []byte
+			if subs, err = Register_XDWDefinition(req.Body); err == nil {
+				if subsbytes, err = json.MarshalIndent(subs, "", "  "); err == nil {
+					return aws_Response(string(subsbytes), http.StatusOK, nil)
+				}
+			}
+			return aws_Response(err.Error(), http.StatusInternalServerError, err)
+		case http.MethodGet:
+			log.Println("Processing GET XDW request")
+			var xdwbytes []byte
+			if _, xdwbytes, err = Get_XDW_Definition(req.QueryStringParameters[tukcnst.PATHWAY]); err == nil {
+				return aws_Response(string(xdwbytes), http.StatusOK, nil)
+			}
+		}
+	case tukcnst.SUBSCRIBE:
+		log.Println("Processing Subscribe request")
+		return aws_Response("", http.StatusOK, nil)
+	case tukcnst.SUBSCRIPTIONS:
+		log.Println("Processing Subscriptions request")
+		return aws_Response("", http.StatusOK, nil)
+	case tukcnst.CANCEL:
+		log.Println("Processing Cancel request")
+		return aws_Response("", http.StatusOK, nil)
+	default:
+		log.Println("Processing POST Broker Event request")
+		return aws_Response(string(dsubEvent.Response), http.StatusOK, tukdsub.NewEvent(&dsubEvent))
 	}
-	return aws_Response(string(dsubEvent.Response), http.StatusOK, nil)
+	return aws_Response(err.Error(), http.StatusInternalServerError, err)
 }
 func aws_Response(body string, status int, err error) (*events.APIGatewayProxyResponse, error) {
 	resp := events.APIGatewayProxyResponse{MultiValueHeaders: map[string][]string{}, IsBase64Encoded: false}
@@ -1084,23 +1116,24 @@ func (i *XDWWorkflowDocument) Update_XDWWorkflowDocument(events tukdbint.Events)
 	}
 }
 
-// New XDWDefinition takes an input string containing the workflow ref. It returns a WorkflowDefinition struc for the requested workflow
-func New_XDWDefinition(workflow string) (WorkflowDefinition, error) {
+// New Get_XDW takes an input string containing the workflow ref. It returns the bytes and a WorkflowDefinition struc for the requested workflow
+func Get_XDW_Definition(xdwdefname string) (WorkflowDefinition, []byte, error) {
 	var err error
+	var xdwdefbyte []byte
 	xdwdef := WorkflowDefinition{}
 	xdws := tukdbint.XDWS{Action: tukcnst.SELECT}
-	xdw := tukdbint.XDW{Name: workflow}
+	xdw := tukdbint.XDW{Name: xdwdefname}
 	xdws.XDW = append(xdws.XDW, xdw)
-	err = tukdbint.NewDBEvent(&xdws)
-	if xdws.Count != 1 {
-		err = errors.New("no xdw definition found for workflow " + workflow)
-	} else {
-		json.Unmarshal([]byte(xdws.XDW[1].XDW), &xdwdef)
+	if err = tukdbint.NewDBEvent(&xdws); err == nil {
+		if xdws.Count == 1 {
+			xdwdefbyte = []byte(xdws.XDW[1].XDW)
+			err = json.Unmarshal(xdwdefbyte, &xdwdef)
+		}
 	}
 	if err != nil {
 		log.Println(err.Error())
 	}
-	return xdwdef, err
+	return xdwdef, xdwdefbyte, err
 }
 
 // NewXDWContentCreator takes input string for author details, a workflo definition and patient struct. It returns a new XDW compliant Document
@@ -1381,6 +1414,39 @@ func New_WorkflowDefinitionFromFile(configFolder string, file fs.DirEntry) (Work
 	}
 	return xdwdef, xdwdefBytes, err
 }
+func New_WorkflowDefinition(wfdef string) (WorkflowDefinition, []byte, error) {
+	var xdwdef = WorkflowDefinition{}
+	var xdwdefBytes = []byte(wfdef)
+	err := json.Unmarshal(xdwdefBytes, &xdwdef)
+	if err == nil {
+		log.Printf("Loaded WF Def for Pathway %s : Bytes = %v", xdwdef.Ref, len(xdwdefBytes))
+	} else {
+		log.Println(err.Error())
+	}
+	return xdwdef, xdwdefBytes, err
+}
+func Register_XDWDefinition(wfdef string) (tukdbint.Subscriptions, error) {
+	var err error
+	var xdwdef = WorkflowDefinition{}
+	var xdwbytes []byte
+	var subs = tukdbint.Subscriptions{}
+	if xdwdef, xdwbytes, err = New_WorkflowDefinition(wfdef); err == nil {
+		if err = Delete_TukWorkflowSubscriptions(xdwdef); err == nil {
+			if err = Delete_TukWorkflowDefinition(xdwdef); err == nil {
+				if subs, err = CreateSubscriptionsFromBrokerExpressions(Get_XDWBrokerExpressions(xdwdef)); err == nil {
+					var xdwdefmap = make(map[string][]byte)
+					xdwdefmap[xdwdef.Ref] = xdwbytes
+					err = Persist_XDWDefinitions(xdwdefmap)
+				}
+			}
+		}
+	}
+	if err != nil {
+		log.Println(err.Error())
+	}
+	return subs, err
+}
+
 func Persist_WorkflowDocument(workflow XDWWorkflowDocument, workflowdef WorkflowDefinition) error {
 	var err error
 	var wfDoc []byte
