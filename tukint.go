@@ -445,6 +445,7 @@ func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse
 		DB_URL:        EnvVars.TUK_DB_URL,
 		DBReader_Only: false,
 	}
+	tukdbint.NewDBEvent(&dbconn)
 
 	dsubEvent := tukdsub.DSUBEvent{
 		Action:                  tukcnst.CREATE,
@@ -1117,7 +1118,7 @@ func (i *XDWWorkflowDocument) Update_XDWWorkflowDocument(events tukdbint.Events)
 	}
 }
 
-// New Get_XDW takes an input string containing the workflow ref. It returns the bytes and a WorkflowDefinition struc for the requested workflow
+// Get_XDW takes an input string containing the workflow ref. It returns the bytes and a WorkflowDefinition struc for the requested workflow
 func Get_XDW_Definition(xdwdefname string) (WorkflowDefinition, []byte, error) {
 	var err error
 	var xdwdefbyte []byte
