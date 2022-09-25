@@ -6,7 +6,6 @@
 package tukcnst
 
 const (
-	DSUB_ACK_TEMPLATE               = "DSUB_ACK_TEMPLATE"
 	QUERY_PARAM_MRN_ID              = "mrnid"
 	QUERY_PARAM_MRN_OID             = "mrnoid"
 	QUERY_PARAM_NHS_ID              = "nhsid"
