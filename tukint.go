@@ -460,6 +460,7 @@ func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse
 		NHS_OID:                 EnvVars.NHS_OID,
 		Message:                 req.Body,
 	}
+	log.Printf("Received DSUB %s resource request", req.Resource)
 	switch req.Resource {
 	case tukcnst.XDW:
 		switch req.HTTPMethod {
