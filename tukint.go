@@ -305,6 +305,9 @@ type Env_Vars struct {
 	TUK_DB_Name             string
 	TUK_DB_User             string
 	TUK_DB_Password         string
+	TUK_DB_Port             string
+	TUK_DB_Timeout          string
+	TUK_DB_Read_Timeout     string
 	DSUB_Broker_URL         string
 	DSUB_Consumer_URL       string
 	DSUB_ACK_TEMPLATE       string
@@ -342,8 +345,12 @@ func init() {
 	EnvVars.TUK_DB_Name = os.Getenv(tukcnst.AWS_ENV_DB_NAME)
 	EnvVars.TUK_DB_Password = os.Getenv(tukcnst.AWS_ENV_DB_PASSWORD)
 	EnvVars.TUK_DB_User = os.Getenv(tukcnst.AWS_ENV_DB_USER)
+	EnvVars.TUK_DB_Port = os.Getenv(tukcnst.AWS_ENV_DB_PORT)
 	EnvVars.Patient_Cache, _ = strconv.ParseBool(os.Getenv(tukcnst.AWS_ENV_PATIENT_CACHE))
 	EnvVars.Rsp_Type = os.Getenv(tukcnst.AWS_ENV_RESPONSE_TYPE)
+	if EnvVars.NHS_OID == "" {
+		EnvVars.NHS_OID = "2.16.840.1.113883.2.1.4.1"
+	}
 }
 
 func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
@@ -428,8 +435,29 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 	}
 }
 func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
-	dbconn := tukdbint.TukDBConnection{DB_URL: EnvVars.TUK_DB_URL}
-	dsubEvent := tukdsub.DSUBEvent{Action: tukcnst.CREATE, Message: req.Body, TUK_DB_Connection: dbconn}
+	dbconn := tukdbint.TukDBConnection{
+		DBUser:        EnvVars.TUK_DB_User,
+		DBPassword:    EnvVars.TUK_DB_Password,
+		DBHost:        EnvVars.TUK_DB_Host,
+		DBPort:        EnvVars.TUK_DB_Port,
+		DBName:        EnvVars.TUK_DB_Name,
+		DB_URL:        EnvVars.TUK_DB_URL,
+		DBReader_Only: false,
+	}
+	dsubEvent := tukdsub.DSUBEvent{
+		Action:                  tukcnst.CREATE,
+		TUK_DB_Connection:       dbconn,
+		DSUB_Broker_URL:         EnvVars.DSUB_Broker_URL,
+		DSUB_Consumer_URL:       EnvVars.DSUB_Consumer_URL,
+		DSUB_Ack_Template:       EnvVars.DSUB_ACK_TEMPLATE,
+		DSUB_Subscribe_Template: EnvVars.DSUB_SUBSCRIBE_TEMPLATE,
+		DSUB_Cancel_Template:    EnvVars.DSUB_CANCEL_TEMPLATE,
+		PDQ_SERVER_URL:          EnvVars.PDQ_Server_URL,
+		PDQ_SERVER_TYPE:         EnvVars.PDQ_Server_Type,
+		REG_OID:                 EnvVars.Reg_OID,
+		NHS_OID:                 EnvVars.NHS_OID,
+		Message:                 req.Body,
+	}
 	if err := tukdsub.NewEvent(&dsubEvent); err != nil {
 		return aws_Response(err.Error(), http.StatusInternalServerError, err)
 	}
