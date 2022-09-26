@@ -1307,10 +1307,11 @@ func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (tuk
 		log.Printf("Creating Broker Subscription for %s workflow expression %s", pwy, exp)
 
 		sub := tukdsub.DSUBSubscribe{
-			BrokerURL:   EnvVars.DSUB_Broker_URL,
-			ConsumerURL: EnvVars.DSUB_Consumer_URL,
-			Topic:       tukcnst.DSUB_TOPIC_TYPE_CODE,
-			Expression:  exp,
+			BrokerURL:          EnvVars.DSUB_Broker_URL,
+			ConsumerURL:        EnvVars.DSUB_Consumer_URL,
+			Topic:              tukcnst.DSUB_TOPIC_TYPE_CODE,
+			Expression:         exp,
+			Subscribe_Template: EnvVars.DSUB_SUBSCRIBE_TEMPLATE,
 		}
 		if err = tukdsub.NewEvent(&sub); err != nil {
 			return rspSubs, err
