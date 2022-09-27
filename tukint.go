@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"html/template"
 	"io/fs"
 	"log"
@@ -24,6 +25,9 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 )
 
+type TUK_Interface interface {
+	newEvent() error
+}
 type TUKServiceState struct {
 	LogEnabled          bool   `json:"logenabled"`
 	Paused              bool   `json:"paused"`
@@ -317,6 +321,21 @@ type Env_Vars struct {
 	Patient_Cache           bool
 	Rsp_Type                string
 }
+type TUKI_XDW_Definition struct {
+	Action         string
+	XDW_Definition string
+	Response       []byte
+}
+type TUKI_AWS_PDQ_Request struct {
+	Action      string
+	AWS_Request events.APIGatewayProxyRequest
+	Response    *events.APIGatewayProxyResponse
+}
+type TUKI_AWS_DSUB_Request struct {
+	Action      string
+	AWS_Request events.APIGatewayProxyRequest
+	Response    *events.APIGatewayProxyResponse
+}
 
 var (
 	EnvVars                            = Env_Vars{}
@@ -351,13 +370,50 @@ func init() {
 		EnvVars.NHS_OID = "2.16.840.1.113883.2.1.4.1"
 	}
 }
-
-func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
+func NewTransaction(i TUK_Interface) error {
+	return i.newEvent()
+}
+func (i *TUKI_AWS_PDQ_Request) newEvent() error {
+	log.Println("Processing PDQ Event")
+	apiRsp, err := newAWS_PDQ(i.AWS_Request)
+	i.Response = apiRsp
+	return err
+}
+func (i *TUKI_XDW_Definition) newEvent() error {
+	log.Printf("Processing %s XDW Event", i.Action)
+	switch i.Action {
+	case tukcnst.REGISTER:
+		subs, err := Register_XDWDefinition(i.XDW_Definition)
+		if err != nil {
+			log.Println(err.Error())
+			return err
+		}
+		i.Response, err = json.MarshalIndent(subs, "", "  ")
+		return err
+	case tukcnst.SELECT:
+		var err error
+		_, i.Response, err = Get_XDW_Definition(i.XDW_Definition)
+		if err != nil {
+			log.Println(err.Error())
+		}
+		return err
+	case tukcnst.DELETE:
+		return Delete_XDW_Definition(i.XDW_Definition)
+	}
+	return errors.New("invalid action")
+}
+func (i *TUKI_AWS_DSUB_Request) newEvent() error {
+	apiRsp, err := newAWS_DSUB(i.AWS_Request)
+	i.Response = apiRsp
+	return err
+}
+func newAWS_PDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	if req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID] != "" {
 		EnvVars.NHS_OID = req.QueryStringParameters[tukcnst.QUERY_PARAM_NHS_OID]
 	}
-	if req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER_TYPE] != "" {
+	if req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER_TYPE] != "" && req.QueryStringParameters[tukcnst.AWS_ENV_PDQ_SERVER_URL] != "" {
 		EnvVars.PDQ_Server_Type = strings.ToLower(req.QueryStringParameters[tukcnst.QUERY_PARAM_PDQ_SERVER_TYPE])
+		EnvVars.PDQ_Server_URL = req.QueryStringParameters[tukcnst.AWS_ENV_PDQ_SERVER_URL]
 	}
 	if req.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE] != "" {
 		EnvVars.Patient_Cache, _ = strconv.ParseBool(req.QueryStringParameters[tukcnst.QUERY_PARAM_CACHE])
@@ -433,20 +489,8 @@ func NewPDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse,
 		return aws_Response(err.Error(), pdq.StatusCode, err)
 	}
 }
-func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
-	var err error
-
-	dbconn := tukdbint.TukDBConnection{
-		DBUser:        EnvVars.TUK_DB_User,
-		DBPassword:    EnvVars.TUK_DB_Password,
-		DBHost:        EnvVars.TUK_DB_Host,
-		DBPort:        EnvVars.TUK_DB_Port,
-		DBName:        EnvVars.TUK_DB_Name,
-		DB_URL:        EnvVars.TUK_DB_URL,
-		DBReader_Only: false,
-	}
-	tukdbint.NewDBEvent(&dbconn)
-
+func newAWS_DSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
+	dbconn := Set_DB_Connection()
 	dsubEvent := tukdsub.DSUBEvent{
 		Action:                  tukcnst.CREATE,
 		TUK_DB_Connection:       dbconn,
@@ -463,25 +507,6 @@ func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse
 	}
 	log.Printf("Received DSUB %s resource request", req.Resource)
 	switch req.Resource {
-	case tukcnst.XDW:
-		switch req.HTTPMethod {
-		case http.MethodPost:
-			log.Println("Processing POST XDW request")
-			var subs tukdbint.Subscriptions
-			var subsbytes []byte
-			if subs, err = Register_XDWDefinition(req.Body); err == nil {
-				if subsbytes, err = json.MarshalIndent(subs, "", "  "); err == nil {
-					return aws_Response(string(subsbytes), http.StatusOK, nil)
-				}
-			}
-			return aws_Response(err.Error(), http.StatusInternalServerError, err)
-		case http.MethodGet:
-			log.Println("Processing GET XDW request")
-			var xdwbytes []byte
-			if _, xdwbytes, err = Get_XDW_Definition(req.QueryStringParameters[tukcnst.PATHWAY]); err == nil {
-				return aws_Response(string(xdwbytes), http.StatusOK, nil)
-			}
-		}
 	case tukcnst.SUBSCRIBE:
 		log.Println("Processing Subscribe request")
 		return aws_Response("", http.StatusOK, nil)
@@ -491,11 +516,9 @@ func NewDSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse
 	case tukcnst.CANCEL:
 		log.Println("Processing Cancel request")
 		return aws_Response("", http.StatusOK, nil)
-	default:
-		log.Println("Processing POST Broker Event request")
-		return aws_Response(string(dsubEvent.Response), http.StatusOK, tukdsub.NewEvent(&dsubEvent))
 	}
-	return aws_Response(err.Error(), http.StatusInternalServerError, err)
+	log.Println("Processing Broker Event request")
+	return aws_Response(string(dsubEvent.Response), http.StatusOK, tukdsub.NewEvent(&dsubEvent))
 }
 func aws_Response(body string, status int, err error) (*events.APIGatewayProxyResponse, error) {
 	resp := events.APIGatewayProxyResponse{MultiValueHeaders: map[string][]string{}, IsBase64Encoded: false}
@@ -503,7 +526,31 @@ func aws_Response(body string, status int, err error) (*events.APIGatewayProxyRe
 	resp.Body = body
 	return &resp, err
 }
-
+func Set_DB_Connection() tukdbint.TukDBConnection {
+	dbconn := tukdbint.TukDBConnection{
+		DBUser:        EnvVars.TUK_DB_User,
+		DBPassword:    EnvVars.TUK_DB_Password,
+		DBHost:        EnvVars.TUK_DB_Host,
+		DBPort:        EnvVars.TUK_DB_Port,
+		DBName:        EnvVars.TUK_DB_Name,
+		DB_URL:        EnvVars.TUK_DB_URL,
+		DBReader_Only: false,
+	}
+	tukdbint.NewDBEvent(&dbconn)
+	return dbconn
+}
+func Set_Env_DB_URL(dburl string) {
+	EnvVars.TUK_DB_URL = dburl
+	Set_DB_Connection()
+}
+func Set_Env_DB_DSN(dbhost string, dbname string, dbuser string, dbpassword string, dbport string) {
+	EnvVars.TUK_DB_Host = dbhost
+	EnvVars.TUK_DB_Name = dbname
+	EnvVars.TUK_DB_User = dbuser
+	EnvVars.TUK_DB_Password = dbpassword
+	EnvVars.TUK_DB_Port = dbport
+	Set_DB_Connection()
+}
 func Set_Home_Community(homeCommunityId string) {
 	HOME_COMMUNITY_ID = homeCommunityId
 }
@@ -1138,6 +1185,14 @@ func Get_XDW_Definition(xdwdefname string) (WorkflowDefinition, []byte, error) {
 	return xdwdef, xdwdefbyte, err
 }
 
+// Delete_XDW_Definition takes an input string containing the ref of the xdw definition to delete
+func Delete_XDW_Definition(xdwdefname string) error {
+	xdws := tukdbint.XDWS{Action: tukcnst.DELETE}
+	xdw := tukdbint.XDW{Name: xdwdefname}
+	xdws.XDW = append(xdws.XDW, xdw)
+	return tukdbint.NewDBEvent(&xdws)
+}
+
 // NewXDWContentCreator takes input string for author details, a workflo definition and patient struct. It returns a new XDW compliant Document
 func New_XDWContentCreator(author string, authorPrefix string, authorOrg string, authorOID string, xdwdef WorkflowDefinition, pat tukpdq.PIXPatient) XDWWorkflowDocument {
 	log.Printf("Creating New %s XDW Document for NHS ID %s", xdwdef.Ref, pat.NHSID)
@@ -1284,11 +1339,7 @@ func Persist_XDWDefinitions(xdwdefs map[string][]byte) error {
 	cnt := 0
 	for ref, def := range xdwdefs {
 		if ref != "" {
-			log.Println("Persisting XDW Definition for Pathway : " + ref)
-			xdws := tukdbint.XDWS{Action: "insert"}
-			xdw := tukdbint.XDW{Name: ref, IsXDSMeta: false, XDW: string(def)}
-			xdws.XDW = append(xdws.XDW, xdw)
-			if err := tukdbint.NewDBEvent(&xdws); err == nil {
+			if err := Persist_XDWDefinition(ref, def); err == nil {
 				log.Println("Persisted XDW Definition for Pathway : " + ref)
 				cnt = cnt + 1
 			} else {
@@ -1298,6 +1349,13 @@ func Persist_XDWDefinitions(xdwdefs map[string][]byte) error {
 	}
 	log.Printf("XDW's Persisted - %v", cnt)
 	return nil
+}
+func Persist_XDWDefinition(ref string, def []byte) error {
+	log.Println("Persisting XDW Definition for Pathway : " + ref)
+	xdws := tukdbint.XDWS{Action: "insert"}
+	xdw := tukdbint.XDW{Name: ref, IsXDSMeta: false, XDW: string(def)}
+	xdws.XDW = append(xdws.XDW, xdw)
+	return tukdbint.NewDBEvent(&xdws)
 }
 func CreateSubscriptionsFromBrokerExpressions(brokerExps map[string]string) (tukdbint.Subscriptions, error) {
 	log.Printf("Creating %v Broker Subscription", len(brokerExps))
@@ -1437,9 +1495,7 @@ func Register_XDWDefinition(wfdef string) (tukdbint.Subscriptions, error) {
 		if err = Delete_TukWorkflowSubscriptions(xdwdef); err == nil {
 			if err = Delete_TukWorkflowDefinition(xdwdef); err == nil {
 				if subs, err = CreateSubscriptionsFromBrokerExpressions(Get_XDWBrokerExpressions(xdwdef)); err == nil {
-					var xdwdefmap = make(map[string][]byte)
-					xdwdefmap[xdwdef.Ref] = xdwbytes
-					err = Persist_XDWDefinitions(xdwdefmap)
+					err = Persist_XDWDefinition(xdwdef.Ref, xdwbytes)
 				}
 			}
 		}

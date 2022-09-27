@@ -142,7 +142,7 @@ func (i *TukDBConnection) newEvent() error {
 			i.DBName = "tuk"
 		}
 		if i.DBTimeout == "" {
-			i.DBTimeout = "60s"
+			i.DBTimeout = "10s"
 		} else {
 			if !strings.HasSuffix(i.DBTimeout, "s") {
 				i.DBTimeout = i.DBTimeout + "s"
