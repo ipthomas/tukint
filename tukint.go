@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"html/template"
 	"io/fs"
 	"log"
@@ -28,46 +27,26 @@ import (
 type TUK_Interface interface {
 	newEvent() error
 }
-type TUKServiceState struct {
-	LogEnabled          bool   `json:"logenabled"`
-	Paused              bool   `json:"paused"`
-	Scheme              string `json:"scheme"`
-	Host                string `json:"host"`
-	Port                int    `json:"port"`
-	Url                 string `json:"url"`
-	User                string `json:"user"`
-	Password            string `json:"password"`
-	Org                 string `json:"org"`
-	Role                string `json:"role"`
-	POU                 string `json:"pou"`
-	ClaimDialect        string `json:"claimdialect"`
-	ClaimValue          string `json:"claimvalue"`
-	BaseFolder          string `json:"basefolder"`
-	LogFolder           string `json:"logfolder"`
-	ConfigFolder        string `json:"configfolder"`
-	TemplatesFolder     string `json:"templatesfolder"`
-	Secret              string `json:"secret"`
-	Token               string `json:"token"`
-	CertPath            string `json:"certpath"`
-	Certs               string `json:"certs"`
-	Keys                string `json:"keys"`
-	DBSrvc              string `json:"dbsrvc"`
-	STSSrvc             string `json:"stssrvc"`
-	SAMLSrvc            string `json:"samlsrvc"`
-	LoginSrvc           string `json:"loginsrvc"`
-	PIXSrvc             string `json:"pixsrvc"`
-	CacheTimeout        int    `json:"cachetimeout"`
-	CacheEnabled        bool   `json:"cacheenabled"`
-	ContextTimeout      int    `json:"contexttimeout"`
-	TUK_DB_URL          string `json:"tukdburl"`
-	DSUB_Broker_URL     string `json:"dsubbrokerurl"`
-	DSUB_Consumer_URL   string `json:"dsubconsumerurl"`
-	DSUB_Subscriber_URL string `json:"dsubsubscriberurl"`
-	PIXm_URL            string `json:"pixmurl"`
-	XDS_Reg_URL         string `json:"xdsregurl"`
-	XDS_Rep_URL         string `json:"xdsrepurl"`
-	NHS_OID             string `json:"nhsoid"`
-	Regional_OID        string `json:"regionaloid"`
+
+type TUKServerState struct {
+	LogEnabled   bool   `json:"logenabled"`
+	Paused       bool   `json:"paused"`
+	Scheme       string `json:"scheme"`
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Url          string `json:"url"`
+	User         string `json:"user"`
+	Password     string `json:"password"`
+	Org          string `json:"org"`
+	Role         string `json:"role"`
+	POU          string `json:"pou"`
+	ClaimDialect string `json:"claimdialect"`
+	ClaimValue   string `json:"claimvalue"`
+	Secret       string `json:"secret"`
+	Token        string `json:"token"`
+	CertPath     string `json:"certpath"`
+	Certs        string `json:"certs"`
+	Keys         string `json:"keys"`
 }
 type Dashboard struct {
 	Total      int
@@ -319,7 +298,14 @@ type Env_Vars struct {
 	PDQ_Server_URL          string
 	PDQ_Server_Type         string
 	Patient_Cache           bool
+	Cache_Timeout           int
+	Context_Timeout         int
 	Rsp_Type                string
+	BaseFolder              string
+	LogFolder               string
+	ConfigFolder            string
+	TemplatesFolder         string
+	TUK_Server              TUKServerState
 }
 type TUKI_XDW_Definition struct {
 	Action         string
@@ -366,11 +352,12 @@ func init() {
 	EnvVars.TUK_DB_Port = os.Getenv(tukcnst.AWS_ENV_DB_PORT)
 	EnvVars.Patient_Cache, _ = strconv.ParseBool(os.Getenv(tukcnst.AWS_ENV_PATIENT_CACHE))
 	EnvVars.Rsp_Type = os.Getenv(tukcnst.AWS_ENV_RESPONSE_TYPE)
+	EnvVars.TUK_Server = TUKServerState{}
 	if EnvVars.NHS_OID == "" {
 		EnvVars.NHS_OID = "2.16.840.1.113883.2.1.4.1"
 	}
 }
-func NewTransaction(i TUK_Interface) error {
+func New_Transaction(i TUK_Interface) error {
 	return i.newEvent()
 }
 func (i *TUKI_AWS_PDQ_Request) newEvent() error {
@@ -381,30 +368,30 @@ func (i *TUKI_AWS_PDQ_Request) newEvent() error {
 }
 func (i *TUKI_XDW_Definition) newEvent() error {
 	log.Printf("Processing %s XDW Event", i.Action)
+	Set_DB_Connection()
+	var err error
 	switch i.Action {
 	case tukcnst.REGISTER:
-		subs, err := Register_XDWDefinition(i.XDW_Definition)
-		if err != nil {
-			log.Println(err.Error())
-			return err
+		var subs tukdbint.Subscriptions
+		if subs, err = Register_XDWDefinition(i.XDW_Definition); err == nil {
+			i.Response, err = json.MarshalIndent(subs, "", "  ")
 		}
-		i.Response, err = json.MarshalIndent(subs, "", "  ")
-		return err
 	case tukcnst.SELECT:
-		var err error
 		_, i.Response, err = Get_XDW_Definition(i.XDW_Definition)
-		if err != nil {
-			log.Println(err.Error())
-		}
-		return err
 	case tukcnst.DELETE:
-		return Delete_XDW_Definition(i.XDW_Definition)
+		err = Delete_XDW_Definition(i.XDW_Definition)
 	}
-	return errors.New("invalid action")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	Close_DB_Connection()
+	return err
 }
 func (i *TUKI_AWS_DSUB_Request) newEvent() error {
+	Set_DB_Connection()
 	apiRsp, err := newAWS_DSUB(i.AWS_Request)
 	i.Response = apiRsp
+	Close_DB_Connection()
 	return err
 }
 func newAWS_PDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
@@ -459,7 +446,7 @@ func newAWS_PDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRespo
 		}
 	}
 	log.Printf("Initiating PDQ request to %s %s using pid %s oid %s", pdq.Server, pdq.Server_URL, pdq.Used_PID, pdq.Used_PID_OID)
-	if err := tukpdq.PDQ(&pdq); err == nil {
+	if err := tukpdq.New_Transaction(&pdq); err == nil {
 		log.Printf("Number of Patients Returned = %v", pdq.Count)
 		if pdq.Count > 0 {
 			if EnvVars.Patient_Cache {
@@ -490,10 +477,7 @@ func newAWS_PDQ(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyRespo
 	}
 }
 func newAWS_DSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
-	dbconn := Set_DB_Connection()
 	dsubEvent := tukdsub.DSUBEvent{
-		Action:                  tukcnst.CREATE,
-		TUK_DB_Connection:       dbconn,
 		DSUB_Broker_URL:         EnvVars.DSUB_Broker_URL,
 		DSUB_Consumer_URL:       EnvVars.DSUB_Consumer_URL,
 		DSUB_Ack_Template:       EnvVars.DSUB_ACK_TEMPLATE,
@@ -505,6 +489,7 @@ func newAWS_DSUB(req events.APIGatewayProxyRequest) (*events.APIGatewayProxyResp
 		NHS_OID:                 EnvVars.NHS_OID,
 		Message:                 req.Body,
 	}
+
 	log.Printf("Received DSUB %s resource request", req.Resource)
 	switch req.Resource {
 	case tukcnst.SUBSCRIBE:
@@ -524,9 +509,10 @@ func aws_Response(body string, status int, err error) (*events.APIGatewayProxyRe
 	resp := events.APIGatewayProxyResponse{MultiValueHeaders: map[string][]string{}, IsBase64Encoded: false}
 	resp.StatusCode = status
 	resp.Body = body
+	Close_DB_Connection()
 	return &resp, err
 }
-func Set_DB_Connection() tukdbint.TukDBConnection {
+func Set_DB_Connection() {
 	dbconn := tukdbint.TukDBConnection{
 		DBUser:        EnvVars.TUK_DB_User,
 		DBPassword:    EnvVars.TUK_DB_Password,
@@ -537,11 +523,12 @@ func Set_DB_Connection() tukdbint.TukDBConnection {
 		DBReader_Only: false,
 	}
 	tukdbint.NewDBEvent(&dbconn)
-	return dbconn
+}
+func Close_DB_Connection() {
+	tukdbint.DBConn.Close()
 }
 func Set_Env_DB_URL(dburl string) {
 	EnvVars.TUK_DB_URL = dburl
-	Set_DB_Connection()
 }
 func Set_Env_DB_DSN(dbhost string, dbname string, dbuser string, dbpassword string, dbport string) {
 	EnvVars.TUK_DB_Host = dbhost
@@ -549,7 +536,6 @@ func Set_Env_DB_DSN(dbhost string, dbname string, dbuser string, dbpassword stri
 	EnvVars.TUK_DB_User = dbuser
 	EnvVars.TUK_DB_Password = dbpassword
 	EnvVars.TUK_DB_Port = dbport
-	Set_DB_Connection()
 }
 func Set_Home_Community(homeCommunityId string) {
 	HOME_COMMUNITY_ID = homeCommunityId
@@ -679,7 +665,7 @@ func (i *ClientRequest) New_PatientRequest() string {
 		NHS_ID:     i.NHS_ID,
 		REG_OID:    i.REG_OID,
 	}
-	if err := tukpdq.PDQ(&query); err != nil {
+	if err := tukpdq.New_Transaction(&query); err != nil {
 		return err.Error()
 	}
 	var b bytes.Buffer
@@ -774,7 +760,7 @@ func (i *ClientRequest) New_WorkflowsRequest() string {
 				NHS_ID:     i.NHS_ID,
 				REG_OID:    i.REG_OID,
 			}
-			if err := tukpdq.PDQ(&query); err != nil {
+			if err := tukpdq.New_Transaction(&query); err != nil {
 				log.Println(err.Error())
 				continue
 			}

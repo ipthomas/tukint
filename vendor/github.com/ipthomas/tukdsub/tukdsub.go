@@ -2,6 +2,7 @@ package tukdsub
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"log"
@@ -17,26 +18,25 @@ import (
 
 // DSUBEvent implements NewEvent(i DSUB_Interface) error
 type DSUBEvent struct {
-	Action                  string
-	TUK_DB_Connection       tukdbint.TukDBConnection
-	DSUB_Broker_URL         string
-	DSUB_Consumer_URL       string
-	DSUB_Topic              string
-	DSUB_Expression         string
-	DSUB_Ack_Template       string
-	DSUB_Subscribe_Template string
-	DSUB_Cancel_Template    string
-	PDQ_SERVER_URL          string
-	PDQ_SERVER_TYPE         string
-	REG_OID                 string
-	NHS_OID                 string
-	Message                 string
-	Notify                  DSUBNotifyMessage
-	Event                   tukdbint.Event
-	Request                 []byte
-	Response                string
-	BrokerRef               string
-	UUID                    string
+	Action          string
+	BrokerURL       string
+	ConsumerURL     string
+	PDQ_SERVER_URL  string
+	PDQ_SERVER_TYPE string
+	REG_OID         string
+	NHS_OID         string
+	EventMessage    string
+	Expressions     []string
+	Pathway         string
+	RowID           int
+	DBConnection    tukdbint.TukDBConnection
+	Subs            tukdbint.Subscriptions
+	Request         []byte
+	Response        []byte
+	BrokerRef       string
+	UUID            string
+	Notify          DSUBNotifyMessage
+	Event           tukdbint.Event
 }
 
 // DSUBSubscribeResponse is an IHE DSUB Subscribe Message compliant struct
@@ -62,33 +62,6 @@ type DSUBSubscribeResponse struct {
 			} `xml:"SubscriptionReference"`
 		} `xml:"SubscribeResponse"`
 	} `xml:"Body"`
-}
-
-// DSUBSubscribe struct provides method dsubSubscribe.NewEvent() to create and send a IHE DSUB Subscribe SOAP message to a IHE DSUB Broker
-type DSUBSubscribe struct {
-	BrokerURL          string
-	ConsumerURL        string
-	Topic              string
-	Expression         string
-	Request            []byte
-	BrokerRef          string
-	Subscribe_Template string
-}
-
-// DSUBCancel struct provides method dsubCancel.NewEvent() to create and send a IHE DSUB Cancel SOAP message to a IHE DSUB Broker
-type DSUBCancel struct {
-	BrokerURL       string
-	BrokerRef       string
-	UUID            string
-	Request         []byte
-	Cancel_Template string
-}
-
-// DSUBAck struct provides method dsubAck.NewEvent() to create and send a DSUB Ack SOAP messge to IHE DSUB Broker
-type DSUBAck struct {
-	BrokerURL    string
-	Request      []byte
-	Ack_Template string
 }
 
 // DSUBNotifyMessage is an IHE DSUB Notify Message compliant struct
@@ -197,29 +170,46 @@ type DSUB_Interface interface {
 	newEvent() error
 }
 
-func NewEvent(i DSUB_Interface) error {
+func New_Transaction(i DSUB_Interface) error {
 	return i.newEvent()
 }
 
-// (i *DSUBEvent) newEvent creates a DSUBNotifyMessage from the DSUBEvent.Message and creates a dbint.Event from the DSUBNotifyMessage values
-// It then checks for Tuk DB Subscriptions matching the brokerref in the populated DSUBEvent.BrokerRef and creates a Tuk DB Event for each subscription
-// A DSUB ack response is always sent back to the DSUB broker regardless of success
-// If no subscriptions are found a DSUB cancel message is sent to the DSUB Broker
 func (i *DSUBEvent) newEvent() error {
-	log.Printf("Processing DSUB Broker Notfy Message\n%s", i.Message)
-	i.Response = i.DSUB_Ack_Template
-	if err := i.NewDSUBNotifyMessage(); err == nil {
+	var err error
+	switch i.Action {
+	case tukcnst.SELECT:
+		log.Printf("Processing Select Subscriptions for Pathway %s", i.Pathway)
+		err = i.selectSubscriptions()
+	case tukcnst.CREATE:
+		log.Println("Processing Create Subscriptions")
+		err = i.createSubscriptions()
+	case tukcnst.CANCEL:
+		log.Println("Processing Cancel Subscriptions")
+		err = i.cancelSubscriptions()
+	default:
+		log.Printf("Processing Broker Notify Message\n%s", i.EventMessage)
+		i.processBrokerEventMessage()
+	}
+	return err
+}
+
+// creates a DSUBNotifyMessage from the EventMessage and populates a new TUKEvent with the DSUBNotifyMessage values
+// It then checks for TukDB Subscriptions matching the brokerref and creates a TUKEvent for each subscription
+// A DSUB ack response is always returned regardless of success
+// If no subscriptions are found a DSUB cancel message is sent to the DSUB Broker
+func (i *DSUBEvent) processBrokerEventMessage() {
+	i.Response = []byte(tukcnst.GO_TEMPLATE_DSUB_ACK)
+	if err := i.newDSUBNotifyMessage(); err == nil {
 		if i.Event.BrokerRef == "" {
 			log.Println("no subscription ref found in notification message")
-			return nil
+			return
 		}
 		log.Printf("Found Subscription Reference %s. Setting Event state from Notify Message", i.Event.BrokerRef)
-		i.initEvent()
+		i.initTUKEvent()
 		if i.Event.XdsPid == "" {
 			log.Println("no pid found in notification message")
-			return nil
+			return
 		}
-		tukdbint.NewDBEvent(&i.TUK_DB_Connection)
 		log.Printf("Checking for TUK Event subscriptions with Broker Ref = %s", i.Event.BrokerRef)
 		tukdbSub := tukdbint.Subscription{BrokerRef: i.Event.BrokerRef}
 		tukdbSubs := tukdbint.Subscriptions{Action: tukcnst.SELECT}
@@ -229,29 +219,26 @@ func (i *DSUBEvent) newEvent() error {
 			if tukdbSubs.Count > 0 {
 				log.Printf("Obtaining NHS ID. Using %s", i.Event.XdsPid+":"+i.REG_OID)
 				pdq := tukpdq.PDQQuery{
-					Server:     i.PDQ_SERVER_TYPE,
-					REG_ID:     i.Event.XdsPid,
-					Server_URL: i.PDQ_SERVER_URL,
-					REG_OID:    i.REG_OID,
+					Server_Mode: i.PDQ_SERVER_TYPE,
+					REG_ID:      i.Event.XdsPid,
+					Server_URL:  i.PDQ_SERVER_URL,
+					REG_OID:     i.REG_OID,
 				}
-				if err = tukpdq.PDQ(&pdq); err != nil {
+				if err = tukpdq.New_Transaction(&pdq); err != nil {
 					log.Println(err.Error())
-					return nil
+					return
 				}
 				if pdq.Count == 0 {
 					log.Println("no patient returned for pid " + i.Event.XdsPid)
-					return nil
+					return
 				}
-				if len(pdq.Patients[0].NHSID) != 10 {
-					log.Println("no valid nhs id returned in pix query for pid " + i.Event.XdsPid)
-					return nil
-				}
+
 				for _, dbsub := range tukdbSubs.Subscriptions {
 					if dbsub.Id > 0 {
 						log.Printf("Creating event for %s %s Subsription for Broker Ref %s", dbsub.Pathway, dbsub.Expression, dbsub.BrokerRef)
 						i.Event.Pathway = dbsub.Pathway
 						i.Event.Topic = dbsub.Topic
-						i.Event.NhsId = pdq.Patients[0].NHSID
+						i.Event.NhsId = pdq.NHS_ID
 						tukevs := tukdbint.Events{Action: "insert"}
 						tukevs.Events = append(tukevs.Events, i.Event)
 						if err = tukdbint.NewDBEvent(&tukevs); err == nil {
@@ -261,23 +248,17 @@ func (i *DSUBEvent) newEvent() error {
 				}
 			} else {
 				log.Printf("No Subscriptions found with brokerref = %s. Sending Cancel request to Broker", i.Event.BrokerRef)
-				dsubCancel := DSUBCancel{
-					BrokerURL:       i.DSUB_Broker_URL,
-					BrokerRef:       i.Event.BrokerRef,
-					UUID:            tukutil.NewUuid(),
-					Cancel_Template: i.DSUB_Cancel_Template,
-				}
-				if err := dsubCancel.NewEvent(); err != nil {
+				i.UUID = tukutil.NewUuid()
+				if err := i.cancelSubscriptions(); err != nil {
 					log.Println(err.Error())
 				}
 			}
 		}
 	}
-	return nil
 }
 
 // InitDSUBEvent initialise the DSUBEvent struc with values parsed from the DSUBNotifyMessage
-func (i *DSUBEvent) initEvent() {
+func (i *DSUBEvent) initTUKEvent() {
 	i.Event.Creationtime = tukutil.Time_Now()
 	i.Event.DocName = i.Notify.NotificationMessage.Message.SubmitObjectsRequest.RegistryObjectList.ExtrinsicObject.Name.LocalizedString.Value
 	i.Event.ClassCode = tukcnst.NO_VALUE
@@ -338,12 +319,12 @@ func (i *DSUBEvent) initEvent() {
 }
 
 // NewDSUBNotifyMessage creates an IHE DSUB Notify message struc from the notfy element in the i.Message
-func (i *DSUBEvent) NewDSUBNotifyMessage() error {
+func (i *DSUBEvent) newDSUBNotifyMessage() error {
 	dsubNotify := DSUBNotifyMessage{}
-	if i.Message == "" {
+	if i.EventMessage == "" {
 		return errors.New("message is empty")
 	}
-	notifyElement := tukutil.GetXMLNodeList(i.Message, tukcnst.DSUB_NOTIFY_ELEMENT)
+	notifyElement := tukutil.GetXMLNodeList(i.EventMessage, tukcnst.DSUB_NOTIFY_ELEMENT)
 	if notifyElement == "" {
 		return errors.New("unable to locate notify element in received message")
 	}
@@ -377,70 +358,120 @@ func (i *DSUBEvent) setExternalIdentifiers() {
 }
 
 // (i *DSUBCancel) NewEvent() creates an IHE DSUB cancel message and sends it to the DSUB broker
-func (i *DSUBCancel) NewEvent() error {
-	tmplt, err := template.New(tukcnst.CANCEL).Funcs(tukutil.TemplateFuncMap()).Parse(i.Cancel_Template)
-	if err != nil {
-		log.Println(err.Error())
-		return err
+func (i *DSUBEvent) cancelSubscriptions() error {
+	if i.Pathway == "" && i.RowID == 0 {
+		return errors.New("pathway or rowid not set invalid request")
 	}
-	var b bytes.Buffer
-	err = tmplt.Execute(&b, i)
-	if err != nil {
-		log.Println(err.Error())
-		return err
+	i.Subs = tukdbint.Subscriptions{Action: tukcnst.DELETE}
+	delsub := tukdbint.Subscription{}
+	if i.Pathway != "" {
+		delsub.Pathway = i.Pathway
+	} else {
+		delsub.Id = i.RowID
 	}
-	i.Request = b.Bytes()
-	soapReq := tukhttp.SOAPRequest{
-		URL:        i.BrokerURL,
-		SOAPAction: tukcnst.SOAP_ACTION_UNSUBSCRIBE_REQUEST,
-		Timeout:    1,
-		Body:       i.Request,
-	}
-	return tukhttp.NewRequest(&soapReq)
-}
-
-// (i *DSUBAck) NewEvent() creates an IHE DSUB Ack message and sends it to the DSUB broker
-func (i *DSUBAck) newEvent() error {
-	i.Request = []byte(i.Ack_Template)
-	soapReq := tukhttp.SOAPRequest{
-		URL:     i.BrokerURL,
-		Timeout: 2,
-		Body:    i.Request,
-	}
-	return tukhttp.NewRequest(&soapReq)
+	i.Subs.Subscriptions = append(i.Subs.Subscriptions, delsub)
+	return tukdbint.NewDBEvent(&i.Subs)
 }
 
 // (i *DSUBSubscribe) NewEvent() creates an IHE DSUB Subscribe message and sends it to the DSUB broker
-func (i *DSUBSubscribe) newEvent() error {
-	tmplt, err := template.New(tukcnst.SUBSCRIBE).Funcs(tukutil.TemplateFuncMap()).Parse(i.Subscribe_Template)
-	if err != nil {
-		log.Println(err.Error())
+func (i *DSUBEvent) createSubscriptions() error {
+	type subreq struct {
+		BrokerURL   string
+		ConsumerURL string
+		Topic       string
+		Expression  string
+	}
+	i.Subs = tukdbint.Subscriptions{Action: i.Action}
+	if len(i.Expressions) > 0 {
+		for _, expression := range i.Expressions {
+			log.Printf("Checking for existing Subscriptions for Expression %s", expression)
+			expressionSubs := tukdbint.Subscriptions{Action: tukcnst.SELECT}
+			expressionSub := tukdbint.Subscription{Pathway: i.Pathway, Topic: tukcnst.DSUB_TOPIC_TYPE_CODE, Expression: expression}
+			expressionSubs.Subscriptions = append(expressionSubs.Subscriptions, expressionSub)
+			if err := tukdbint.NewDBEvent(&expressionSubs); err != nil {
+				return err
+			}
+			if expressionSubs.Count == 1 {
+				log.Printf("Found %v Subscription for Pathway %s Topic %s Expression %s", expressionSubs.Count, i.Pathway, tukcnst.DSUB_TOPIC_TYPE_CODE, expression)
+				i.Subs.Subscriptions = append(i.Subs.Subscriptions, expressionSubs.Subscriptions[1])
+				i.Subs.Count = i.Subs.Count + 1
+				if i.Subs.LastInsertId < int64(expressionSubs.Subscriptions[1].Id) {
+					i.Subs.LastInsertId = int64(expressionSubs.Subscriptions[1].Id)
+				}
+			} else {
+				log.Printf("No Subscription for Pathway %s Topic %s Expression %s found", i.Pathway, tukcnst.DSUB_TOPIC_TYPE_CODE, expression)
+				brokerSub := subreq{
+					BrokerURL:   i.BrokerURL,
+					ConsumerURL: i.ConsumerURL,
+					Topic:       tukcnst.DSUB_TOPIC_TYPE_CODE,
+					Expression:  expression,
+				}
+				tmplt, err := template.New(tukcnst.SUBSCRIBE).Funcs(tukutil.TemplateFuncMap()).Parse(tukcnst.GO_TEMPLATE_DSUB_SUBSCRIBE)
+				if err != nil {
+					log.Println(err.Error())
+					return err
+				}
+				var b bytes.Buffer
+				err = tmplt.Execute(&b, brokerSub)
+				if err != nil {
+					log.Println(err.Error())
+					return err
+				}
+				soapReq := tukhttp.SOAPRequest{
+					URL:        i.BrokerURL,
+					SOAPAction: tukcnst.SOAP_ACTION_SUBSCRIBE_REQUEST,
+					Body:       b.Bytes(),
+				}
+				log.Printf("Sending Subscribe Request to DSUB Broker %s", i.BrokerURL)
+				err = tukhttp.NewRequest(&soapReq)
+				if err != nil {
+					log.Println(err.Error())
+					return err
+				}
+				subrsp := DSUBSubscribeResponse{}
+				err = xml.Unmarshal(soapReq.Response, &subrsp)
+				if err != nil {
+					log.Println(err.Error())
+					return err
+				}
+				newSub := tukdbint.Subscription{}
+				newSub.BrokerRef = subrsp.Body.SubscribeResponse.SubscriptionReference.Address
+				log.Printf("Set Broker Ref =  %s", newSub.BrokerRef)
+				if newSub.BrokerRef != "" {
+					newSub.Pathway = i.Pathway
+					newSub.Expression = brokerSub.Expression
+					newSub.Topic = tukcnst.DSUB_TOPIC_TYPE_CODE
+					newsubs := tukdbint.Subscriptions{Action: tukcnst.INSERT}
+					newsubs.Subscriptions = append(newsubs.Subscriptions, newSub)
+					log.Println("Registering Subscription with Event Service")
+					if err := tukdbint.NewDBEvent(&newsubs); err != nil {
+						log.Println(err.Error())
+						return err
+					}
+					i.Subs.Subscriptions = append(i.Subs.Subscriptions, newSub)
+					if i.Subs.LastInsertId < int64(newSub.Id) {
+						i.Subs.LastInsertId = int64(newSub.Id)
+					}
+					i.Subs.Count = i.Subs.Count + 1
+				} else {
+					log.Println("No Broker Reference found. Subscription not registered with Event Service")
+				}
+			}
+		}
+	}
+	i.Response, _ = json.MarshalIndent(i.Subs, "", "  ")
+	return nil
+}
+func (i *DSUBEvent) selectSubscriptions() error {
+	i.Subs = tukdbint.Subscriptions{Action: tukcnst.SELECT}
+	sub := tukdbint.Subscription{}
+	if i.Pathway != "" {
+		sub.Pathway = i.Pathway
+	}
+	i.Subs.Subscriptions = append(i.Subs.Subscriptions, sub)
+	if err := tukdbint.NewDBEvent(&i.Subs); err != nil {
 		return err
 	}
-	var b bytes.Buffer
-	err = tmplt.Execute(&b, i)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	i.Request = b.Bytes()
-	soapReq := tukhttp.SOAPRequest{
-		URL:        i.BrokerURL,
-		SOAPAction: tukcnst.SOAP_ACTION_SUBSCRIBE_REQUEST,
-		Body:       i.Request,
-	}
-	err = tukhttp.NewRequest(&soapReq)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	subrsp := DSUBSubscribeResponse{}
-	err = xml.Unmarshal(soapReq.Response, &subrsp)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	i.BrokerRef = subrsp.Body.SubscribeResponse.SubscriptionReference.Address
-	log.Printf("Broker Response. Broker Ref :  %s", subrsp.Body.SubscribeResponse.SubscriptionReference.Address)
+	i.Response, _ = json.MarshalIndent(i.Subs, "", "  ")
 	return nil
 }
