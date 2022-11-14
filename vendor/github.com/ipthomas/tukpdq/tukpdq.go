@@ -1,147 +1,3 @@
-// tukpdq provides a golang implementtion of, IHE PIXm,IHE PIXv3 and IHE PDQv3 Client Consumers
-//
-// There is currently no authentication implemented. The func (i *PDQQuery) newRequest() error is used to handle the http request/response and should be amended according to your authentication requirements
-//
-// Struct PDQQuery implements the tukpdq.PDQ() interface
-//
-//	type PDQQuery struct {
-//		Count        int          `json:"count"`
-//		PID          string       `json:"pid"`
-//		PIDOID       string       `json:"pidoid"`
-//		PIX_URL      string       `json:"pixurl"`
-//		NHS_OID      string       `json:"nhsoid"`
-//		Region_OID   string       `json:"regionoid"`
-//		Timeout      int64        `json:"timeout"`
-//		StatusCode   int          `json:"statuscode"`
-//		Response     []byte       `json:"response"`
-//		PIXmResponse PIXmResponse `json:"pixmresponse"`
-//		Patients     []PIXPatient `json:"patients"`
-//	}
-//
-//	 PID is the MRN or NHS ID or Regional/xds ID and is required
-//	 Region_OID is the Regional/XDS OID and is required
-//	 PIX_URL is the PIXm WS end point and is required.
-//	 PID_OID is required if the PID is not an NHS ID. If pid length = 10 and no PID_OID is provided, the pid is assumed to be a NHS ID and the PID_OID is set to the NHS offical NHS ID OID (2.16.840.1.113883.2.1.4.1)
-//	 Timeout sets the http context timeout in seconds and is optional. Default is 5 secs
-//	 NHS_OID is optional. Default is 2.16.840.1.113883.2.1.4.1
-//	 Count will be set from the pixm response to the number of patients found matching the query
-//	 Response will contain the PIXm response in []byte format
-//	 PIXmResponse will contain the initialised PIXmResponse struc from the Response []byte
-//	 StatusCode will be set from the PIXm Server http response header statuscode
-//	 []Patients is any array of PIXPatient structs containing all matched patients. Hopefully just 1 !!
-//
-//	Example usage:
-//		pdq := tukpdq.PIXmQuery{
-//			PID:        "9999999468",
-//			Region_OID: "2.16.840.1.113883.2.1.3.31.2.1.1",
-//			PIX_URL:    "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient",
-//		}
-//		if err = tukpdq.PDQ(&pdq); err == nil {
-//			log.Printf("Patient %s %s is registered", pdq.Patients[0].GivenName, pdq.Patients[0].FamilyName)
-//		} else {
-//			log.Println(err.Error())
-//		}
-//
-//	Running the above example produces the following Log output:
-//
-//	2022/09/12 14:02:55.510679 tukpdq.go:188: HTTP GET Request Headers
-//
-//	2022/09/12 14:02:55.510834 tukpdq.go:190: {
-//	  "Accept": [
-//	    "*/*"
-//	  ],
-//	  "Connection": [
-//	    "keep-alive"
-//	  ],
-//	  "Content-Type": [
-//	    "application/json"
-//	  ]
-//	}
-//
-// 2022/09/12 14:02:55.510860 tukpdq.go:191: HTTP Request
-// URL = http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient?identifier=2.16.840.1.113883.2.1.4.1%7C9999999468&_format=json&_pretty=true
-// 2022/09/12 14:02:55.851605 tukpdq.go:194: HTML Response - Status Code = 200
-//
-//	{
-//	  "resourceType": "Bundle",
-//	  "id": "53c44d32-fb2c-4dfb-b819-db2150e6fa87",
-//	  "type": "searchset",
-//	  "total": 1,
-//	  "link": [ {
-//	    "relation": "self",
-//	    "url": "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient?_format=json&_pretty=true&identifier=2.16.840.1.113883.2.1.4.1%7C9999999468"
-//	  } ],
-//	  "entry": [ {
-//	    "fullUrl": "http://spirit-test-01.tianispirit.co.uk:8081/SpiritPIXFhir/r4/Patient/VFNVSy4xNjYxOTc2MjMwMjYxMSYyLjE2Ljg0MC4xLjExMzg4My4yLjEuMy4zMS4yLjEuMS4xLjMuMS4x",
-//	    "resource": {
-//	      "resourceType": "Patient",
-//	      "id": "VFNVSy4xNjYxOTc2MjMwMjYxMSYyLjE2Ljg0MC4xLjExMzg4My4yLjEuMy4zMS4yLjEuMS4xLjMuMS4x",
-//	      "extension": [ {
-//	        "url": "http://hl7.org/fhir/StructureDefinition/patient-citizenship",
-//	        "valueCodeableConcept": {
-//	          "coding": [ {
-//	            "code": "GBR"
-//	          } ]
-//	        }
-//	      }, {
-//	        "url": "http://hl7.org/fhir/StructureDefinition/patient-nationality",
-//	        "valueCodeableConcept": {
-//	          "coding": [ {
-//	            "code": "GBR"
-//	          } ]
-//	        }
-//	      } ],
-//	      "identifier": [ {
-//	        "system": "urn:oid:2.16.840.1.113883.2.1.4.1",
-//	        "value": "9999999468"
-//	      }, {
-//	        "use": "usual",
-//	        "system": "urn:oid:2.16.840.1.113883.2.1.3.31.2.1.1.1.3.1.1",
-//	        "value": "TSUK.16619762302611"
-//	      }, {
-//	        "system": "urn:oid:2.16.840.1.113883.2.1.3.31.2.1.1",
-//	        "value": "REG.1MWU5C92M2"
-//	      } ],
-//	      "active": true,
-//	      "name": [ {
-//	        "use": "official",
-//	        "family": "Testpatient",
-//	        "given": [ "Nhs" ]
-//	      } ],
-//	      "telecom": [ {
-//	        "system": "phone",
-//	        "value": "07777661324",
-//	        "use": "work"
-//	      }, {
-//	        "system": "email",
-//	        "value": "nhs.testpatient@nhs.net",
-//	        "use": "work"
-//	      } ],
-//	      "gender": "male",
-//	      "birthDate": "1962-04-04",
-//	      "address": [ {
-//	        "line": [ "Preston Road" ],
-//	        "city": "Preston",
-//	        "state": "Lancashire",
-//	        "postalCode": "PR1 1PR",
-//	        "country": "GBR"
-//	      } ],
-//	      "maritalStatus": {
-//	        "coding": [ {
-//	          "code": "D"
-//	        } ]
-//	      },
-//	      "multipleBirthBoolean": false
-//	    }
-//	  } ]
-//	}
-//
-// 2022/09/12 14:02:55.852334 tukpdq.go:102: 1 Patient Entries in Response
-// 2022/09/12 14:02:55.852392 tukpdq.go:122: Set NHS ID 9999999468 2.16.840.1.113883.2.1.4.1
-// 2022/09/12 14:02:55.852427 tukpdq.go:117: Set PID TSUK.16619762302611 2.16.840.1.113883.2.1.3.31.2.1.1.1.3.1.1
-// 2022/09/12 14:02:55.852455 tukpdq.go:112: Set Reg ID REG.1MWU5C92M2 2.16.840.1.113883.2.1.3.31.2.1.1
-// 2022/09/12 14:02:55.852546 tukpdq.go:149: Added Patient 9999999468 to response
-// 2022/09/12 14:02:55.852569 main.go:84: Patient Nhs Testpatient is registered
 package tukpdq
 
 import (
@@ -151,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"text/template"
@@ -170,6 +27,15 @@ type PDQQuery struct {
 	MRN_OID         string           `json:",omitempty"`
 	REG_ID          string           `json:",omitempty"`
 	REG_OID         string           `json:",omitempty"`
+	GivenName       string           `json:"givenname"`
+	FamilyName      string           `json:"familyname"`
+	BirthDate       string           `json:"birthdate"`
+	Gender          string           `json:"gender"`
+	Zip             string           `json:"zip"`
+	Street          string           `json:"street"`
+	Town            string           `json:"town"`
+	City            string           `json:"city"`
+	Country         string           `json:"country"`
 	Timeout         int64            `json:",omitempty"`
 	Cache           bool             `json:",omitempty"`
 	Used_PID        string           `json:",omitempty"`
@@ -314,72 +180,85 @@ type CGLUserResponse struct {
 }
 type PDQv3Response struct {
 	XMLName xml.Name `xml:"Envelope"`
+	Text    string   `xml:",chardata"`
 	S       string   `xml:"S,attr"`
 	Env     string   `xml:"env,attr"`
 	Header  struct {
+		Text   string `xml:",chardata"`
 		Action struct {
+			Text  string `xml:",chardata"`
 			Xmlns string `xml:"xmlns,attr"`
-			S     string `xml:"S,attr"`
-			Env   string `xml:"env,attr"`
 		} `xml:"Action"`
 		MessageID struct {
+			Text  string `xml:",chardata"`
 			Xmlns string `xml:"xmlns,attr"`
-			S     string `xml:"S,attr"`
-			Env   string `xml:"env,attr"`
 		} `xml:"MessageID"`
 		RelatesTo struct {
+			Text  string `xml:",chardata"`
 			Xmlns string `xml:"xmlns,attr"`
-			S     string `xml:"S,attr"`
-			Env   string `xml:"env,attr"`
 		} `xml:"RelatesTo"`
 		To struct {
+			Text  string `xml:",chardata"`
 			Xmlns string `xml:"xmlns,attr"`
-			S     string `xml:"S,attr"`
-			Env   string `xml:"env,attr"`
 		} `xml:"To"`
 	} `xml:"Header"`
 	Body struct {
+		Text             string `xml:",chardata"`
 		PRPAIN201306UV02 struct {
+			Text       string `xml:",chardata"`
 			Xmlns      string `xml:"xmlns,attr"`
 			ITSVersion string `xml:"ITSVersion,attr"`
 			ID         struct {
+				Text      string `xml:",chardata"`
 				Extension string `xml:"extension,attr"`
 				Root      string `xml:"root,attr"`
 			} `xml:"id"`
 			CreationTime struct {
+				Text  string `xml:",chardata"`
 				Value string `xml:"value,attr"`
 			} `xml:"creationTime"`
 			VersionCode struct {
+				Text string `xml:",chardata"`
 				Code string `xml:"code,attr"`
 			} `xml:"versionCode"`
 			InteractionId struct {
+				Text      string `xml:",chardata"`
 				Extension string `xml:"extension,attr"`
 				Root      string `xml:"root,attr"`
 			} `xml:"interactionId"`
 			ProcessingCode struct {
+				Text string `xml:",chardata"`
 				Code string `xml:"code,attr"`
 			} `xml:"processingCode"`
 			ProcessingModeCode struct {
+				Text string `xml:",chardata"`
 				Code string `xml:"code,attr"`
 			} `xml:"processingModeCode"`
 			AcceptAckCode struct {
+				Text string `xml:",chardata"`
 				Code string `xml:"code,attr"`
 			} `xml:"acceptAckCode"`
 			Receiver struct {
+				Text     string `xml:",chardata"`
 				TypeCode string `xml:"typeCode,attr"`
 				Device   struct {
+					Text           string `xml:",chardata"`
 					ClassCode      string `xml:"classCode,attr"`
 					DeterminerCode string `xml:"determinerCode,attr"`
 					ID             struct {
+						Text                   string `xml:",chardata"`
 						AssigningAuthorityName string `xml:"assigningAuthorityName,attr"`
 						Root                   string `xml:"root,attr"`
 					} `xml:"id"`
 					AsAgent struct {
+						Text                    string `xml:",chardata"`
 						ClassCode               string `xml:"classCode,attr"`
 						RepresentedOrganization struct {
+							Text           string `xml:",chardata"`
 							ClassCode      string `xml:"classCode,attr"`
 							DeterminerCode string `xml:"determinerCode,attr"`
 							ID             struct {
+								Text                   string `xml:",chardata"`
 								AssigningAuthorityName string `xml:"assigningAuthorityName,attr"`
 								Root                   string `xml:"root,attr"`
 							} `xml:"id"`
@@ -388,19 +267,25 @@ type PDQv3Response struct {
 				} `xml:"device"`
 			} `xml:"receiver"`
 			Sender struct {
+				Text     string `xml:",chardata"`
 				TypeCode string `xml:"typeCode,attr"`
 				Device   struct {
+					Text           string `xml:",chardata"`
 					ClassCode      string `xml:"classCode,attr"`
 					DeterminerCode string `xml:"determinerCode,attr"`
 					ID             struct {
+						Text string `xml:",chardata"`
 						Root string `xml:"root,attr"`
 					} `xml:"id"`
 					AsAgent struct {
+						Text                    string `xml:",chardata"`
 						ClassCode               string `xml:"classCode,attr"`
 						RepresentedOrganization struct {
+							Text           string `xml:",chardata"`
 							ClassCode      string `xml:"classCode,attr"`
 							DeterminerCode string `xml:"determinerCode,attr"`
 							ID             struct {
+								Text string `xml:",chardata"`
 								Root string `xml:"root,attr"`
 							} `xml:"id"`
 						} `xml:"representedOrganization"`
@@ -408,107 +293,177 @@ type PDQv3Response struct {
 				} `xml:"device"`
 			} `xml:"sender"`
 			Acknowledgement struct {
+				Text     string `xml:",chardata"`
 				TypeCode struct {
+					Text string `xml:",chardata"`
 					Code string `xml:"code,attr"`
 				} `xml:"typeCode"`
 				TargetMessage struct {
-					ID struct {
+					Text string `xml:",chardata"`
+					ID   struct {
+						Text      string `xml:",chardata"`
 						Extension string `xml:"extension,attr"`
 						Root      string `xml:"root,attr"`
 					} `xml:"id"`
 				} `xml:"targetMessage"`
 			} `xml:"acknowledgement"`
 			ControlActProcess struct {
+				Text      string `xml:",chardata"`
 				ClassCode string `xml:"classCode,attr"`
 				MoodCode  string `xml:"moodCode,attr"`
 				Code      struct {
+					Text       string `xml:",chardata"`
 					Code       string `xml:"code,attr"`
 					CodeSystem string `xml:"codeSystem,attr"`
 				} `xml:"code"`
 				Subject struct {
+					Text                 string `xml:",chardata"`
 					ContextConductionInd string `xml:"contextConductionInd,attr"`
 					TypeCode             string `xml:"typeCode,attr"`
 					RegistrationEvent    struct {
+						Text      string `xml:",chardata"`
 						ClassCode string `xml:"classCode,attr"`
 						MoodCode  string `xml:"moodCode,attr"`
 						ID        struct {
+							Text       string `xml:",chardata"`
 							NullFlavor string `xml:"nullFlavor,attr"`
 						} `xml:"id"`
 						StatusCode struct {
+							Text string `xml:",chardata"`
 							Code string `xml:"code,attr"`
 						} `xml:"statusCode"`
 						Subject1 struct {
+							Text     string `xml:",chardata"`
 							TypeCode string `xml:"typeCode,attr"`
 							Patient  struct {
+								Text      string `xml:",chardata"`
 								ClassCode string `xml:"classCode,attr"`
 								ID        []struct {
+									Text                   string `xml:",chardata"`
 									AssigningAuthorityName string `xml:"assigningAuthorityName,attr"`
 									Extension              string `xml:"extension,attr"`
 									Root                   string `xml:"root,attr"`
 								} `xml:"id"`
 								StatusCode struct {
+									Text string `xml:",chardata"`
 									Code string `xml:"code,attr"`
 								} `xml:"statusCode"`
 								EffectiveTime struct {
+									Text  string `xml:",chardata"`
 									Value string `xml:"value,attr"`
 								} `xml:"effectiveTime"`
 								PatientPerson struct {
+									Text           string `xml:",chardata"`
 									ClassCode      string `xml:"classCode,attr"`
 									DeterminerCode string `xml:"determinerCode,attr"`
 									Name           struct {
+										Text   string `xml:",chardata"`
 										Use    string `xml:"use,attr"`
 										Given  string `xml:"given"`
 										Family string `xml:"family"`
 									} `xml:"name"`
+									Telecom []struct {
+										Text  string `xml:",chardata"`
+										Use   string `xml:"use,attr"`
+										Value string `xml:"value,attr"`
+									} `xml:"telecom"`
 									AdministrativeGenderCode struct {
+										Text           string `xml:",chardata"`
 										Code           string `xml:"code,attr"`
 										CodeSystem     string `xml:"codeSystem,attr"`
 										CodeSystemName string `xml:"codeSystemName,attr"`
 									} `xml:"administrativeGenderCode"`
 									BirthTime struct {
+										Text  string `xml:",chardata"`
 										Value string `xml:"value,attr"`
 									} `xml:"birthTime"`
 									DeceasedInd struct {
+										Text  string `xml:",chardata"`
 										Value string `xml:"value,attr"`
 									} `xml:"deceasedInd"`
 									MultipleBirthInd struct {
+										Text  string `xml:",chardata"`
 										Value string `xml:"value,attr"`
 									} `xml:"multipleBirthInd"`
 									Addr struct {
+										Text              string `xml:",chardata"`
 										StreetAddressLine string `xml:"streetAddressLine"`
 										City              string `xml:"city"`
 										State             string `xml:"state"`
 										PostalCode        string `xml:"postalCode"`
 										Country           string `xml:"country"`
 									} `xml:"addr"`
+									MaritalStatusCode struct {
+										Text           string `xml:",chardata"`
+										Code           string `xml:"code,attr"`
+										CodeSystem     string `xml:"codeSystem,attr"`
+										CodeSystemName string `xml:"codeSystemName,attr"`
+									} `xml:"maritalStatusCode"`
+									AsCitizen struct {
+										Text            string `xml:",chardata"`
+										ClassCode       string `xml:"classCode,attr"`
+										PoliticalNation struct {
+											Text           string `xml:",chardata"`
+											ClassCode      string `xml:"classCode,attr"`
+											DeterminerCode string `xml:"determinerCode,attr"`
+											Code           struct {
+												Text string `xml:",chardata"`
+												Code string `xml:"code,attr"`
+											} `xml:"code"`
+										} `xml:"politicalNation"`
+									} `xml:"asCitizen"`
+									AsMember struct {
+										Text      string `xml:",chardata"`
+										ClassCode string `xml:"classCode,attr"`
+										Group     struct {
+											Text           string `xml:",chardata"`
+											ClassCode      string `xml:"classCode,attr"`
+											DeterminerCode string `xml:"determinerCode,attr"`
+											Code           struct {
+												Text           string `xml:",chardata"`
+												Code           string `xml:"code,attr"`
+												CodeSystem     string `xml:"codeSystem,attr"`
+												CodeSystemName string `xml:"codeSystemName,attr"`
+											} `xml:"code"`
+										} `xml:"group"`
+									} `xml:"asMember"`
 									BirthPlace struct {
+										Text string `xml:",chardata"`
 										Addr struct {
+											Text string `xml:",chardata"`
 											City string `xml:"city"`
 										} `xml:"addr"`
 									} `xml:"birthPlace"`
 								} `xml:"patientPerson"`
 								ProviderOrganization struct {
+									Text           string `xml:",chardata"`
 									ClassCode      string `xml:"classCode,attr"`
 									DeterminerCode string `xml:"determinerCode,attr"`
 									ID             struct {
+										Text       string `xml:",chardata"`
 										NullFlavor string `xml:"nullFlavor,attr"`
 									} `xml:"id"`
 									ContactParty struct {
+										Text      string `xml:",chardata"`
 										ClassCode string `xml:"classCode,attr"`
 									} `xml:"contactParty"`
 								} `xml:"providerOrganization"`
 								SubjectOf1 struct {
+									Text                  string `xml:",chardata"`
 									TypeCode              string `xml:"typeCode,attr"`
 									QueryMatchObservation struct {
+										Text      string `xml:",chardata"`
 										ClassCode string `xml:"classCode,attr"`
 										MoodCode  string `xml:"moodCode,attr"`
 										Code      struct {
+											Text       string `xml:",chardata"`
 											Code       string `xml:"code,attr"`
 											CodeSystem string `xml:"codeSystem,attr"`
 										} `xml:"code"`
 										Value struct {
-											Value string `xml:"value,attr"`
+											Text  string `xml:",chardata"`
 											Xsi   string `xml:"xsi,attr"`
+											Value string `xml:"value,attr"`
 											Type  string `xml:"type,attr"`
 										} `xml:"value"`
 									} `xml:"queryMatchObservation"`
@@ -516,10 +471,13 @@ type PDQv3Response struct {
 							} `xml:"patient"`
 						} `xml:"subject1"`
 						Custodian struct {
+							Text           string `xml:",chardata"`
 							TypeCode       string `xml:"typeCode,attr"`
 							AssignedEntity struct {
+								Text      string `xml:",chardata"`
 								ClassCode string `xml:"classCode,attr"`
 								ID        struct {
+									Text       string `xml:",chardata"`
 									NullFlavor string `xml:"nullFlavor,attr"`
 								} `xml:"id"`
 							} `xml:"assignedEntity"`
@@ -527,44 +485,59 @@ type PDQv3Response struct {
 					} `xml:"registrationEvent"`
 				} `xml:"subject"`
 				QueryAck struct {
+					Text    string `xml:",chardata"`
 					QueryId struct {
+						Text      string `xml:",chardata"`
 						Extension string `xml:"extension,attr"`
 						Root      string `xml:"root,attr"`
 					} `xml:"queryId"`
 					StatusCode struct {
+						Text string `xml:",chardata"`
 						Code string `xml:"code,attr"`
 					} `xml:"statusCode"`
 					QueryResponseCode struct {
+						Text string `xml:",chardata"`
 						Code string `xml:"code,attr"`
 					} `xml:"queryResponseCode"`
 					ResultTotalQuantity struct {
+						Text  string `xml:",chardata"`
 						Value string `xml:"value,attr"`
 					} `xml:"resultTotalQuantity"`
 					ResultCurrentQuantity struct {
+						Text  string `xml:",chardata"`
 						Value string `xml:"value,attr"`
 					} `xml:"resultCurrentQuantity"`
 					ResultRemainingQuantity struct {
+						Text  string `xml:",chardata"`
 						Value string `xml:"value,attr"`
 					} `xml:"resultRemainingQuantity"`
 				} `xml:"queryAck"`
 				QueryByParameter struct {
+					Text    string `xml:",chardata"`
 					QueryId struct {
+						Text      string `xml:",chardata"`
 						Extension string `xml:"extension,attr"`
 						Root      string `xml:"root,attr"`
 					} `xml:"queryId"`
 					StatusCode struct {
+						Text string `xml:",chardata"`
 						Code string `xml:"code,attr"`
 					} `xml:"statusCode"`
 					ResponseModalityCode struct {
+						Text string `xml:",chardata"`
 						Code string `xml:"code,attr"`
 					} `xml:"responseModalityCode"`
 					ResponsePriorityCode struct {
+						Text string `xml:",chardata"`
 						Code string `xml:"code,attr"`
 					} `xml:"responsePriorityCode"`
 					MatchCriterionList string `xml:"matchCriterionList"`
 					ParameterList      struct {
+						Text            string `xml:",chardata"`
 						LivingSubjectId struct {
+							Text  string `xml:",chardata"`
 							Value struct {
+								Text      string `xml:",chardata"`
 								Extension string `xml:"extension,attr"`
 							} `xml:"value"`
 							SemanticsText string `xml:"semanticsText"`
@@ -840,7 +813,6 @@ type PDQInterface interface {
 
 var (
 	pat_cache = make(map[string][]byte)
-	pdq_cache = make(map[string]*[]TUKPatient)
 )
 
 func New_Transaction(i PDQInterface) error {
@@ -854,10 +826,12 @@ func (i *PDQQuery) pdq() error {
 }
 func (i *PDQQuery) setPDQ_ID() error {
 	if i.Server_URL == "" {
-		return errors.New("invalid request - pix server url is not set")
+		return errors.New("invalid request - pdq server url is not set")
 	}
 	if i.REG_OID == "" {
-		return errors.New("invalid request - reg oid is not set")
+		if os.Getenv(tukcnst.XDSDOMAIN) == "" {
+			return errors.New("invalid request - reg oid is not set")
+		}
 	}
 	if i.Timeout == 0 {
 		i.Timeout = 5
@@ -890,8 +864,6 @@ func (i *PDQQuery) setPatient() error {
 			log.Printf("Cache entry found for Patient ID %s", i.Used_PID)
 			i.StatusCode = http.StatusOK
 			i.Response = pat_cache[i.Used_PID]
-			i.Patients = pdq_cache[i.Used_PID]
-			i.Count = len(*i.Patients)
 			return nil
 		}
 	}
@@ -946,11 +918,8 @@ func (i *PDQQuery) setPatient() error {
 										pat.PIDOID = i.MRN_OID
 									}
 								}
-								pats := []TUKPatient{}
-								pats = append(pats, pat)
 								if i.Cache {
 									pat_cache[i.Used_PID] = i.Response
-									pdq_cache[i.Used_PID] = &pats
 								}
 							}
 						}
@@ -970,38 +939,18 @@ func (i *PDQQuery) setPatient() error {
 						} else {
 							i.Count, _ = strconv.Atoi(i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.QueryAck.ResultTotalQuantity.Value)
 							if i.Count > 0 {
-								pat := TUKPatient{
-									PIDOID:     i.MRN_OID,
-									PID:        i.MRN_ID,
-									REGOID:     i.REG_OID,
-									REGID:      i.REG_ID,
-									NHSOID:     i.NHS_OID,
-									NHSID:      i.NHS_ID,
-									GivenName:  i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.Name.Given,
-									FamilyName: i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.Name.Family,
-									Gender:     i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.AdministrativeGenderCode.Code,
-									BirthDate:  i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.BirthTime.Value,
-									Street:     i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.Addr.StreetAddressLine,
-									City:       i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.Addr.City,
-									State:      i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.Addr.State,
-									Zip:        i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.PatientPerson.Addr.PostalCode,
-								}
 								for _, pid := range i.PDQv3Response.Body.PRPAIN201306UV02.ControlActProcess.Subject.RegistrationEvent.Subject1.Patient.ID {
 									switch pid.Root {
 									case i.REG_OID:
-										pat.REGID = pid.Extension
+										i.REG_ID = pid.Extension
 									case i.NHS_OID:
-										pat.NHSID = pid.Extension
+										i.NHS_ID = pid.Extension
 									case i.MRN_OID:
-										pat.PID = pid.Extension
-										pat.PIDOID = i.MRN_OID
+										i.MRN_ID = pid.Extension
 									}
 								}
-								pats := []TUKPatient{}
-								pats = append(pats, pat)
 								if i.Cache {
 									pat_cache[i.Used_PID] = i.Response
-									pdq_cache[i.Used_PID] = &pats
 								}
 							}
 						}
@@ -1028,25 +977,21 @@ func (i *PDQQuery) setPatient() error {
 					log.Printf("%v Patient Entries in Response", i.PIXmResponse.Total)
 					i.Count = i.PIXmResponse.Total
 					if i.Count > 0 {
-						pats := []TUKPatient{}
 						for cnt := 0; cnt < len(i.PIXmResponse.Entry); cnt++ {
 							rsppat := i.PIXmResponse.Entry[cnt]
-							tukpat := TUKPatient{}
 							for _, id := range rsppat.Resource.Identifier {
 								if id.System == tukcnst.URN_OID_PREFIX+i.REG_OID {
-									tukpat.REGID = id.Value
-									tukpat.REGOID = i.REG_OID
-									log.Printf("Set Reg ID %s %s", tukpat.REGID, tukpat.REGOID)
+									i.REG_ID = id.Value
+									log.Printf("Set Reg ID %s %s", i.REG_ID, i.REG_OID)
 								}
 								if id.Use == "usual" {
-									tukpat.PID = id.Value
-									tukpat.PIDOID = strings.Split(id.System, ":")[2]
-									log.Printf("Set PID %s %s", tukpat.PID, tukpat.PIDOID)
+									i.MRN_ID = id.Value
+									i.MRN_OID = strings.Split(id.System, ":")[2]
+									log.Printf("Set PID %s %s", i.MRN_ID, i.MRN_OID)
 								}
 								if id.System == tukcnst.URN_OID_PREFIX+i.NHS_OID {
-									tukpat.NHSID = id.Value
-									tukpat.NHSOID = i.NHS_OID
-									log.Printf("Set NHS ID %s %s", tukpat.NHSID, tukpat.NHSOID)
+									i.NHS_ID = id.Value
+									log.Printf("Set NHS ID %s %s", i.NHS_ID, i.NHS_OID)
 								}
 							}
 							gn := ""
@@ -1055,28 +1000,25 @@ func (i *PDQQuery) setPatient() error {
 									gn = gn + n + " "
 								}
 							}
-							tukpat.GivenName = strings.TrimSuffix(gn, " ")
-							tukpat.FamilyName = rsppat.Resource.Name[0].Family
-							tukpat.BirthDate = strings.ReplaceAll(rsppat.Resource.BirthDate, "-", "")
-							tukpat.Gender = rsppat.Resource.Gender
+							i.GivenName = strings.TrimSuffix(gn, " ")
+							i.FamilyName = rsppat.Resource.Name[0].Family
+							i.BirthDate = strings.ReplaceAll(rsppat.Resource.BirthDate, "-", "")
+							i.Gender = rsppat.Resource.Gender
 
 							if len(rsppat.Resource.Address) > 0 {
-								tukpat.Zip = rsppat.Resource.Address[0].PostalCode
+								i.Zip = rsppat.Resource.Address[0].PostalCode
 								if len(rsppat.Resource.Address[0].Line) > 0 {
-									tukpat.Street = rsppat.Resource.Address[0].Line[0]
+									i.Street = rsppat.Resource.Address[0].Line[0]
 									if len(rsppat.Resource.Address[0].Line) > 1 {
-										tukpat.Town = rsppat.Resource.Address[0].Line[1]
+										i.Town = rsppat.Resource.Address[0].Line[1]
 									}
 								}
-								tukpat.City = rsppat.Resource.Address[0].City
-								tukpat.Country = rsppat.Resource.Address[0].Country
+								i.City = rsppat.Resource.Address[0].City
+								i.Country = rsppat.Resource.Address[0].Country
 							}
-							pats = append(pats, tukpat)
-							log.Printf("Added Patient %s to response", tukpat.NHSID)
 						}
 						if i.Cache {
 							pat_cache[i.Used_PID] = i.Response
-							pdq_cache[i.Used_PID] = &pats
 						}
 					}
 				}
