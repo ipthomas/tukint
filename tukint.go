@@ -414,7 +414,7 @@ func (i *TukEvent) IsWorkflowOverdue() bool {
 	if time.Now().Before(completionDate) {
 		return false
 	}
-	if i.XDWWorkflowDocument.WorkflowStatus == tukcnst.COMPLETE {
+	if i.XDWWorkflowDocument.WorkflowStatus == tukcnst.TUK_STATUS_CLOSED {
 		lupdt := i.LastUpdateTime()
 		if lupdt.Before(completionDate) {
 			return false
