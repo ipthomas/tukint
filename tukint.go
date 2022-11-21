@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -443,7 +444,6 @@ func (i *TukEvent) TaskDuration(taskid string) string {
 	return trans.GetTaskDuration()
 }
 func (i *TukEvent) IsTaskOverdue(taskid string) bool {
-	log.Printf("Checking if task %s is Overdue", taskid)
 	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition, Task_ID: tukutil.GetIntFromString(taskid)}
 	return trans.IsTaskOverdue()
 }
@@ -483,6 +483,8 @@ func (i *TukEvent) parsePostEvent() []byte {
 	i.HttpResponse.Header().Set(tukcnst.CONTENT_TYPE, tukcnst.SOAP_XML)
 	i.ReturnXML = true
 	i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.APPLICATION_XML)
+	b, _ := io.ReadAll(i.HttpRequest.Body)
+	i.Body = string(b)
 	return i.EventServices.HandleBrokerNotification(i.Body)
 }
 func (i *TukEvent) newXDWHandler() []byte {
@@ -645,6 +647,7 @@ func (i *TukEvent) createUserEvent() []byte {
 func (i *TukEvent) handleRequest() []byte {
 	if i.HTTPMethod == http.MethodPost {
 		log.Printf("Processing POST Request from %s", i.HttpRequest.RemoteAddr)
+		defer i.HttpRequest.Body.Close()
 		return i.parsePostEvent()
 	}
 	log.Printf("Processing GET %s %s Request from %s", i.Act, i.Task, i.HttpRequest.RemoteAddr)
@@ -1181,31 +1184,29 @@ func (i *TukEvent) WorkflowTasksWidget() []byte {
 	return b.Bytes()
 }
 func (i *TukEvent) DashboardWidget() []byte {
-	xdwkey := strings.ToUpper(i.Pathway) + i.NHSId
-	i.Status = strings.ToUpper(i.Status)
-	switch i.Status {
+	switch strings.ToUpper(i.Status) {
 	case tukcnst.OPEN:
 		i.Status = tukcnst.OPEN
 	case tukcnst.CLOSED:
-		i.Status = tukcnst.CLOSED
-	case "MET":
-		i.Status = tukcnst.CLOSED
-	case "MISSED":
-		i.Status = tukcnst.CLOSED
-	case "ESCALATED":
+		i.Status = tukcnst.TUK_STATUS_CLOSED
+	case tukcnst.TUK_STATUS_MET:
+		i.Status = tukcnst.TUK_STATUS_CLOSED
+	case tukcnst.TUK_STATUS_MISSED:
+		i.Status = tukcnst.TUK_STATUS_CLOSED
+	case tukcnst.TUK_STATUS_ESCALATED:
 		i.Status = tukcnst.OPEN
 	}
-	trans := tukxdw.Transaction{Workflows: tukxdw.GetWorkflows(i.Pathway, i.NHSId, xdwkey, i.DocRef, i.Vers, false, i.Status)}
+	trans := tukxdw.Transaction{Workflows: tukxdw.GetWorkflows(i.Pathway, i.NHSId, "", i.DocRef, i.Vers, false, "")}
 	trans.SetDashboardState()
-	if i.Status == "MET" {
+	if i.Status == tukcnst.TUK_STATUS_MET {
 		trans := tukxdw.Transaction{Workflows: trans.TargetMetWorkflows}
 		trans.SetDashboardState()
 	} else {
-		if i.Status == "MISSED" {
+		if i.Status == tukcnst.TUK_STATUS_MISSED {
 			trans := tukxdw.Transaction{Workflows: trans.OverdueWorkflows}
 			trans.SetDashboardState()
 		} else {
-			if i.Status == "ESCALATED" {
+			if i.Status == tukcnst.TUK_STATUS_ESCALATED {
 				trans := tukxdw.Transaction{Workflows: trans.EscalteWorkflows}
 				trans.SetDashboardState()
 			}
