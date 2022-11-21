@@ -42,7 +42,7 @@ type EventServices struct {
 	LogService          ServiceState
 	DBService           ServiceState
 	ServiceConfigs      []string
-	WorkflowXDSConfigs  []XDSDocumentMeta
+	WorkflowXDSConfigs  []tukxdw.XDSDocumentMeta
 	ActivePathways      []string
 	HTMLWidgets         []string
 	XMLMessages         []string
@@ -106,37 +106,6 @@ type ServiceState struct {
 	TokenSrvc      string `json:"tokensrvc"`
 	ContextTimeout int    `json:"contexttimeout"`
 }
-type XDSDocumentMeta struct {
-	ID                    string `json:"id"`
-	Repositoryuniqueid    string `json:"repositoryuniqueid"`
-	Registryoid           string `json:"registryoid"`
-	Languagecode          string `json:"languagecode"`
-	Docname               string `json:"docname"`
-	Docdesc               string `json:"docdesc"`
-	DocID                 string
-	Authorinstitution     string
-	Authorperson          string
-	Classcode             string `json:"classcode"`
-	Classcodescheme       string `json:"classcodescheme"`
-	Classcodevalue        string `json:"classcodevalue"`
-	Typecode              string `json:"typecode"`
-	Typecodescheme        string `json:"typecodescheme"`
-	Typecodevalue         string `json:"typecodevalue"`
-	Practicesettingcode   string `json:"practicesettingcode"`
-	Practicesettingscheme string `json:"practicesettingscheme"`
-	Practicesettingvalue  string `json:"practicesettingvalue"`
-	Confcode              string `json:"confcode"`
-	Confcodescheme        string `json:"confcodescheme"`
-	Confcodevalue         string `json:"confcodevalue"`
-	Facilitycode          string `json:"facilitycode"`
-	Facilitycodescheme    string `json:"facilitycodescheme"`
-	Facilitycodevalue     string `json:"facilitycodevalue"`
-	Formatcode            string `json:"formatcode"`
-	Formatcodescheme      string `json:"formatcodescheme"`
-	Formatcodevalue       string `json:"formatcodevalue"`
-	Mimetype              string `json:"mimetype"`
-	Objecttype            string `json:"objecttype"`
-}
 type TukEvent struct {
 	Act                 string
 	Task                string
@@ -189,7 +158,7 @@ type TukEvent struct {
 	Base64EncodedFile   string
 	EventServices       EventServices
 	XDWWorkflowDocument tukxdw.XDWWorkflowDocument
-	XDSDocumentMeta     XDSDocumentMeta
+	XDSDocumentMeta     tukxdw.XDSDocumentMeta
 	WorkflowDefinition  tukxdw.WorkflowDefinition
 	ConfigStr           string
 }
@@ -220,21 +189,6 @@ func init() {
 		configFile = strings.TrimSuffix(configFile, ".json")
 	}
 	log.Printf("Environment Var 'TUK_CONFIG_FILE' not set. configFile set to %s", configFile)
-	if os.Getenv(tukcnst.ENV_DB_USER) == "" {
-		os.Setenv(tukcnst.ENV_DB_USER, "root")
-	}
-	if os.Getenv(tukcnst.ENV_DB_PASSWORD) == "" {
-		os.Setenv(tukcnst.ENV_DB_PASSWORD, "rootPass")
-	}
-	if os.Getenv(tukcnst.ENV_DB_HOST) == "" {
-		os.Setenv(tukcnst.ENV_DB_HOST, "localhost")
-	}
-	if os.Getenv(tukcnst.ENV_DB_PORT) == "" {
-		os.Setenv(tukcnst.ENV_DB_PORT, "3306")
-	}
-	if os.Getenv(tukcnst.ENV_DB_NAME) == "" {
-		os.Setenv(tukcnst.ENV_DB_NAME, "tuk")
-	}
 	Services.DBService.User = os.Getenv(tukcnst.ENV_DB_USER)
 	Services.DBService.Password = os.Getenv(tukcnst.ENV_DB_PASSWORD)
 	Services.DBService.Host = os.Getenv(tukcnst.ENV_DB_HOST)
