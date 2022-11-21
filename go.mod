@@ -3,7 +3,7 @@ module github.com/ipthomas/tukint
 go 1.19
 
 require (
-	github.com/aws/aws-lambda-go v1.34.1
+	github.com/aws/aws-lambda-go v1.35.0
 	github.com/ipthomas/tukcnst v1.3.1
 	github.com/ipthomas/tukdbint v1.3.1
 	github.com/ipthomas/tukdsub v1.3.1
