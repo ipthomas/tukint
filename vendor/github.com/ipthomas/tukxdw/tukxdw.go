@@ -151,7 +151,6 @@ type WorkflowDefinition struct {
 		} `json:"output,omitempty"`
 	} `json:"tasks"`
 }
-
 type XDWWorkflowDocument struct {
 	XMLName                        xml.Name              `xml:"XDW.WorkflowDocument"`
 	Hl7                            string                `xml:"hl7,attr"`
@@ -300,6 +299,8 @@ func (i *Transaction) execute() error {
 	}
 	return nil
 }
+
+// IHE XDW Content Updater
 func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 	log.Printf("Updating %s Workflow Version %v for NHS ID %s", pwy, vers, nhsId)
 	wfdef := WorkflowDefinition{}
@@ -418,7 +419,7 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 	}
 	wfs = tukdbint.Workflows{Action: tukcnst.UPDATE}
 	wf := tukdbint.Workflow{Published: false, Pathway: pwy, NHSId: nhsId, Version: vers}
-	if IsWorkflowCompleteBehaviorMet(wfdoc, wfdef) {
+	if IsWorkflowCompleteBehaviorMet(wfdoc, wfdef, nhsId) {
 		wfdoc.WorkflowStatus = tukcnst.CLOSED
 		docevent := DocumentEvent{}
 		docevent.Author = user
@@ -438,8 +439,6 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 	wfs.Workflows = append(wfs.Workflows, wf)
 	return tukdbint.NewDBEvent(&wfs)
 }
-
-// IHE XDW Content Updater
 func (i *Transaction) contentUpdater() error {
 	log.Printf("Updating %s Workflow Version %v for NHS ID %s", i.Pathway, i.XDWVersion, i.NHS_ID)
 	i.Workflows = tukdbint.GetWorkflows(i.Pathway, i.NHS_ID, "", "", i.XDWVersion, false, "")
@@ -880,7 +879,7 @@ func (i *Transaction) IsTaskOverdue() bool {
 	}
 	if i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.Status == tukcnst.COMPLETE {
 		log.Printf("Task %v is Complete. Checking latest task event time", i.Task_ID)
-		lasteventime := i.GetLatestTaskEventTime()
+		lasteventime := tukutil.GetTimeFromString(i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.LastModifiedTime)
 		if lasteventime.Before(completionDate) {
 			log.Printf("Task %v was NOT overdue", i.Task_ID)
 			return false
@@ -889,22 +888,15 @@ func (i *Transaction) IsTaskOverdue() bool {
 	log.Printf("Task %v IS overdue", i.Task_ID)
 	return true
 }
+func GetTaskCompleteByDate(xdwdoc XDWWorkflowDocument, xdwdef WorkflowDefinition, task int) string {
+	trans := Transaction{XDWDocument: xdwdoc, XDWDefinition: xdwdef, Task_ID: task}
+	return strings.Split(trans.GetTaskCompleteByDate().String(), ".")[0]
+}
 func (i *Transaction) GetTaskCompleteByDate() time.Time {
-	task := i.Task_ID - 1
-	if i.XDWDefinition.Tasks[task].CompleteByTime == "" {
+	if i.XDWDefinition.Tasks[i.Task_ID-1].CompleteByTime == "" {
 		return i.GetWorkflowCompleteByDate()
 	}
-	workflowStartTime := tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
-	return tukutil.OHT_FutureDate(workflowStartTime, i.XDWDefinition.Tasks[task].CompleteByTime)
-}
-func (i *Transaction) GetLatestTaskEventTime() time.Time {
-	taskid := tukutil.GetStringFromInt(i.Task_ID - 1)
-	for _, task := range i.XDWDocument.TaskList.XDWTask {
-		if task.TaskData.TaskDetails.ID == taskid {
-			return tukutil.GetTimeFromString(task.TaskData.TaskDetails.LastModifiedTime)
-		}
-	}
-	return tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
+	return tukutil.OHT_FutureDate(tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value), i.XDWDefinition.Tasks[i.Task_ID-1].CompleteByTime)
 }
 func (i *XDWWorkflowDocument) GetWorkflowDuration() string {
 	ws := tukutil.GetTimeFromString(i.EffectiveTime.Value)
@@ -1086,8 +1078,8 @@ func (i *Transaction) setIsWorkflowOverdueState() bool {
 func (i *Transaction) GetWorkflowCompleteByDate() time.Time {
 	return tukutil.OHT_FutureDate(tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value), i.XDWDefinition.CompleteByTime)
 }
-func IsWorkflowCompleteBehaviorMet(i XDWWorkflowDocument, xdw WorkflowDefinition) bool {
-	trans := Transaction{XDWDocument: i, XDWDefinition: xdw}
+func IsWorkflowCompleteBehaviorMet(i XDWWorkflowDocument, xdw WorkflowDefinition, nhs string) bool {
+	trans := Transaction{XDWDocument: i, XDWDefinition: xdw, NHS_ID: nhs}
 	return trans.IsWorkflowCompleteBehaviorMet()
 }
 func (i *Transaction) IsWorkflowCompleteBehaviorMet() bool {
