@@ -17,12 +17,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"tukevent-server/tukcnst"
-	"tukevent-server/tukdbint"
-	"tukevent-server/tukdsub"
-	"tukevent-server/tukpdq"
-	"tukevent-server/tukutil"
-	"tukevent-server/tukxdw"
+
+	"github.com/ipthomas/tukcnst"
+	"github.com/ipthomas/tukdbint"
+	"github.com/ipthomas/tukdsub"
+	"github.com/ipthomas/tukpdq"
+	"github.com/ipthomas/tukutil"
+	"github.com/ipthomas/tukxdw"
 
 	"github.com/aws/aws-lambda-go/events"
 )
