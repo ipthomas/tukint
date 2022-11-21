@@ -17,13 +17,12 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/ipthomas/tukcnst"
-	"github.com/ipthomas/tukdbint"
-	"github.com/ipthomas/tukdsub"
-	"github.com/ipthomas/tukpdq"
-	"github.com/ipthomas/tukutil"
-	"github.com/ipthomas/tukxdw"
+	"tukevent-server/tukcnst"
+	"tukevent-server/tukdbint"
+	"tukevent-server/tukdsub"
+	"tukevent-server/tukpdq"
+	"tukevent-server/tukutil"
+	"tukevent-server/tukxdw"
 
 	"github.com/aws/aws-lambda-go/events"
 )
@@ -189,22 +188,16 @@ func init() {
 		configFile = strings.TrimSuffix(configFile, ".json")
 	}
 	log.Printf("Environment Var 'TUK_CONFIG_FILE' not set. configFile set to %s", configFile)
-	Services.DBService.User = os.Getenv(tukcnst.ENV_DB_USER)
-	Services.DBService.Password = os.Getenv(tukcnst.ENV_DB_PASSWORD)
-	Services.DBService.Host = os.Getenv(tukcnst.ENV_DB_HOST)
-	Services.DBService.Port = tukutil.GetIntFromString(os.Getenv(tukcnst.ENV_DB_PORT))
-	Services.DBService.DataBase = os.Getenv(tukcnst.ENV_DB_NAME)
 	LogFile = tukutil.CreateLog(tukcnst.DEFAULT_TUK_SERVICE_LOG_FOLDER)
 }
 func InitTuki() {
-	if err := SetEventServiceState(); err == nil {
+	var err error
+	if err = SetEventServiceState(); err == nil {
 		err = cacheTemplates()
-		if err != nil {
-			log.Println(err.Error())
-			os.Exit(1)
-		}
-	} else {
+	}
+	if err != nil {
 		log.Println(err.Error())
+		os.Exit(1)
 	}
 }
 func SetEventServiceState() error {
@@ -256,7 +249,7 @@ func getTemplateFuncMap() template.FuncMap {
 }
 func (i *EventServices) SetEventServicesStates() error {
 	var err error
-	dbconn := tukdbint.TukDBConnection{DBUser: Services.DBService.User, DBPassword: Services.DBService.Password, DBHost: Services.DBService.Host, DBPort: tukutil.GetStringFromInt(Services.DBService.Port), DBName: Services.DBService.DataBase}
+	dbconn := tukdbint.TukDBConnection{DBUser: os.Getenv(tukcnst.ENV_DB_USER), DBPassword: os.Getenv(tukcnst.ENV_DB_PASSWORD), DBHost: os.Getenv(tukcnst.ENV_DB_HOST), DBPort: os.Getenv(tukcnst.ENV_DB_PORT), DBName: os.Getenv(tukcnst.ENV_DB_NAME)}
 	if err := tukdbint.NewDBEvent(&dbconn); err != nil {
 		log.Println(err.Error())
 	}
