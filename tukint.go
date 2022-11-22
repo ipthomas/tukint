@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -360,6 +361,105 @@ func (i *ServiceState) setServiceWSE() {
 	i.WSE = i.Scheme + "://" + i.Host + ":" + tukutil.GetStringFromInt(i.Port) + "/" + i.Url
 	log.Printf("Set %s Event Service WSE %s", i.Desc, i.WSE)
 }
+func loadFile(file fs.DirEntry, folder string) []byte {
+	var fileBytes []byte
+	var err error
+	fileBytes, err = os.ReadFile(folder + file.Name())
+	if err != nil {
+		log.Println(err.Error())
+	} else {
+		log.Printf("Loaded %s ", file.Name())
+	}
+	return fileBytes
+}
+func persistServiceConfigs() {
+	log.Println("Processing Event Service Config Files")
+	if srvcs, err := tukutil.GetFolderFiles(Basepath + "services/"); err == nil {
+		for _, file := range srvcs {
+			if strings.HasSuffix(file.Name(), ".json") {
+				if filebytes := loadFile(file, Basepath+"services/"); filebytes != nil {
+					srvcs := tukdbint.ServiceStates{Action: tukcnst.DELETE}
+					srvc := tukdbint.ServiceState{Name: strings.TrimSuffix(file.Name(), ".json")}
+					srvcs.ServiceState = append(srvcs.ServiceState, srvc)
+					tukdbint.NewDBEvent(&srvcs)
+					srvcs = tukdbint.ServiceStates{Action: tukcnst.INSERT}
+					srvc = tukdbint.ServiceState{Name: strings.TrimSuffix(file.Name(), ".json"), Service: string(filebytes)}
+					srvcs.ServiceState = append(srvcs.ServiceState, srvc)
+					tukdbint.NewDBEvent(&srvcs)
+				}
+			}
+		}
+	}
+}
+func persistTemplates() {
+	if xmlTmplts, err := tukutil.GetFolderFiles(Basepath + "templates/xml/"); err == nil {
+		for _, file := range xmlTmplts {
+			if strings.HasSuffix(file.Name(), ".xml") {
+				filebytes := loadFile(file, Basepath+"templates/xml/")
+				if filebytes != nil {
+					log.Printf("Persisting XML Template %s", file.Name())
+					tmplts := tukdbint.Templates{Action: tukcnst.DELETE}
+					tmplt := tukdbint.Template{Name: strings.TrimSuffix(file.Name(), ".xml"), IsXML: true}
+					tmplts.Templates = append(tmplts.Templates, tmplt)
+					tukdbint.NewDBEvent(&tmplts)
+					tmplts = tukdbint.Templates{Action: tukcnst.INSERT}
+					tmplt = tukdbint.Template{Name: strings.TrimSuffix(file.Name(), ".xml"), IsXML: true, Template: string(filebytes)}
+					tmplts.Templates = append(tmplts.Templates, tmplt)
+					tukdbint.NewDBEvent(&tmplts)
+				}
+			}
+		}
+	}
+	if htmlTmplts, err := tukutil.GetFolderFiles(Basepath + "templates/html/"); err == nil {
+		for _, file := range htmlTmplts {
+			if strings.HasSuffix(file.Name(), ".html") {
+				filebytes := loadFile(file, Basepath+"templates/html/")
+				if filebytes != nil {
+					log.Printf("Persisting HTML Template %s", file.Name())
+					tmplts := tukdbint.Templates{Action: tukcnst.DELETE}
+					tmplt := tukdbint.Template{Name: strings.TrimSuffix(file.Name(), ".html")}
+					tmplts.Templates = append(tmplts.Templates, tmplt)
+					tukdbint.NewDBEvent(&tmplts)
+					tmplts = tukdbint.Templates{Action: tukcnst.INSERT}
+					tmplt = tukdbint.Template{Name: strings.TrimSuffix(file.Name(), ".html"), Template: string(filebytes)}
+					tmplts.Templates = append(tmplts.Templates, tmplt)
+					tukdbint.NewDBEvent(&tmplts)
+				}
+			}
+		}
+	}
+}
+func persistXDWConfigs() {
+	log.Println("Processing XDW Config Files")
+	if xdwconfigs, err := tukutil.GetFolderFiles(Basepath + "xdwconfig/"); err == nil {
+		for _, file := range xdwconfigs {
+			splitname := strings.Split(file.Name(), ".")
+			if len(splitname) < 2 {
+				log.Printf("File %s is not a XDW Configuration File", file.Name())
+				continue
+			}
+			suffix := strings.Split(file.Name(), ".")[1]
+			if filebytes := loadFile(file, Basepath+"xdwconfig/"); filebytes != nil {
+				trans := tukxdw.Transaction{
+					Actor:            tukcnst.XDW_ADMIN_REGISTER_DEFINITION,
+					Pathway:          splitname[0],
+					DSUB_BrokerURL:   os.Getenv(tukcnst.DSUB_BROKER_URL),
+					DSUB_ConsumerURL: os.Getenv(tukcnst.ENV_DSUB_CONSUMER_URL),
+					Request:          filebytes,
+				}
+				if suffix == "_meta.json" {
+					trans.Actor = tukcnst.XDW_ADMIN_REGISTER_XDS_META
+				}
+				tukxdw.Execute(&trans)
+			} else {
+				log.Printf("Unable to load file %s", file.Name())
+			}
+		}
+	}
+}
+func (i *TukEvent) PrettyTime(time string) string {
+	return strings.TrimSpace(strings.Split(strings.ReplaceAll(strings.ReplaceAll(time, "T", " "), "Z", ""), "+")[0])
+}
 func (i *TukEvent) IsBrokerExpression(expression string) bool {
 	return tukutil.IsBrokerExpression(expression)
 }
@@ -378,13 +478,17 @@ func (i *TukEvent) ElapsedTime(wf tukdbint.Workflow) string {
 	log.Printf("Calculating elapsed time for workflow %s nhs id %s version %v started %s", xdwdoc.WorkflowDefinitionReference, xdwdoc.Patient.ID.Extension, i.Vers, xdwdoc.EffectiveTime.Value)
 	return xdwdoc.GetWorkflowDuration()
 }
-func (i *TukEvent) LastUpdateTime() time.Time {
+func (i *TukEvent) LastUpdateTime() string {
+	return i.PrettyTime(i.XDWWorkflowDocument.GetLatestWorkflowEventTime().String())
+}
+func (i *TukEvent) lastUpdateTime() time.Time {
 	return i.XDWWorkflowDocument.GetLatestWorkflowEventTime()
 }
 func (i *TukEvent) TaskCompleteByTimeString(taskid string) string {
 	log.Printf("Obtaining Workflow Task %s Complete By date", taskid)
 	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition, Task_ID: tukutil.GetIntFromString(taskid)}
-	return strings.Split(trans.GetTaskCompleteByDate().String(), " +")[0]
+	return i.PrettyTime(trans.GetTaskCompleteByDate().String())
+	//return strings.Split(trans.GetTaskCompleteByDate().String(), " +")[0]
 }
 func (i *TukEvent) TaskDuration(taskid string) string {
 	log.Printf("Obtaining task %s duration", taskid)
@@ -404,7 +508,7 @@ func (i *TukEvent) CompletionTime() string {
 	if i.WorkflowDefinition.CompleteByTime == "" {
 		return "Non Specified"
 	}
-	return strings.Split(i.getWorkflowCompleteByDate().String(), ".")[0]
+	return i.PrettyTime(i.getWorkflowCompleteByDate().String())
 }
 func (i *TukEvent) IsWorkflowOverdue() bool {
 	if i.WorkflowDefinition.CompleteByTime == "" {
@@ -414,8 +518,8 @@ func (i *TukEvent) IsWorkflowOverdue() bool {
 	if time.Now().Before(completionDate) {
 		return false
 	}
-	if i.XDWWorkflowDocument.WorkflowStatus == tukcnst.TUK_STATUS_CLOSED {
-		lupdt := i.LastUpdateTime()
+	if i.XDWWorkflowDocument.WorkflowStatus == tukcnst.CLOSED {
+		lupdt := i.lastUpdateTime()
 		if lupdt.Before(completionDate) {
 			return false
 		}
@@ -1181,7 +1285,17 @@ func (i *TukEvent) TimelineWidget() []byte {
 func (i *TukEvent) AdminSpaWidget() []byte {
 	i.EventServices.ActivePathways = tukxdw.GetActiveWorkflowNames()
 	var tplReturn bytes.Buffer
-	if i.Task == tukcnst.TUK_TASK_RESTART {
+	switch i.Task {
+	case tukcnst.TUK_TASK_RESTART:
+		InitTuki()
+	case tukcnst.TUK_TASK_INIT_SERVICES:
+		persistServiceConfigs()
+		InitTuki()
+	case tukcnst.TUK_TASK_INIT_TEMPLATES:
+		persistTemplates()
+		InitTuki()
+	case tukcnst.TUK_TASK_INIT_XDWS:
+		persistXDWConfigs()
 		InitTuki()
 	}
 	if err := i.EventServices.HTMLTemplates.ExecuteTemplate(&tplReturn, tukcnst.TUK_TEMPLATE_ADMIN_SPA_WIDGET, i); err != nil {
