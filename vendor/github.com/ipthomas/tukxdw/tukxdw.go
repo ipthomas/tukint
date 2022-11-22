@@ -860,7 +860,12 @@ func GetPathwayWorkflows(pathway string) tukdbint.Workflows {
 	return tukdbint.GetPathwayWorkflows(pathway)
 }
 func GetActiveWorkflowNames() []string {
-	return tukdbint.GetActiveWorkflowNames()
+	var names []string
+	wfnames := tukdbint.GetActiveWorkflowNames()
+	for name := range wfnames {
+		names = append(names, name)
+	}
+	return names
 }
 func IsWorkflowPublished(pathway string, nhsid string, version int) bool {
 	wfs := GetWorkflows(pathway, nhsid, "", "", version, true, "")
@@ -1061,7 +1066,7 @@ func (i *Transaction) setIsWorkflowOverdueState() bool {
 			if i.XDWDocument.WorkflowStatus == tukcnst.CLOSED {
 				log.Printf("Workflow is Complete, Obtaining latest workflow event time")
 				i.setWorkflowLatestEventTime()
-				log.Printf("Workflow Latest Event Time %s. Workflow Target Met = %v", i.XDWState.LatestWorkflowEventTime.String(), i.XDWState.LatestWorkflowEventTime.After(completebyDate))
+				log.Printf("Workflow Latest Event Time %s. Workflow Target Met = %v", i.XDWState.LatestWorkflowEventTime.String(), i.XDWState.LatestWorkflowEventTime.Before(completebyDate))
 				return i.XDWState.LatestWorkflowEventTime.After(completebyDate)
 			} else {
 				log.Printf("Workflow is not Complete. Complete By Date is %s Workflow Target not met", completebyDate.String())
@@ -1396,30 +1401,35 @@ func (i *Transaction) SetDashboardState() error {
 				return err
 			}
 			if i.XDWDocument.WorkflowStatus == tukcnst.OPEN {
+				log.Printf("Workflow %s is OPEN", wf.XDW_Key)
 				i.OpenWorkflows.Workflows = append(i.OpenWorkflows.Workflows, wf)
 				i.OpenWorkflows.Count = i.OpenWorkflows.Count + 1
 				i.Dashboard.InProgress = i.Dashboard.InProgress + 1
+				if i.IsWorkflowEscalated() {
+					log.Printf("Workflow %s is ESCALATED", wf.XDW_Key)
+					i.EscalteWorkflows.Workflows = append(i.EscalteWorkflows.Workflows, wf)
+					i.EscalteWorkflows.Count = i.EscalteWorkflows.Count + 1
+					i.Dashboard.Escalated = i.Dashboard.Escalated + 1
+				}
 			} else {
+				log.Printf("Workflow %s is CLOSED", wf.XDW_Key)
 				i.ClosedWorkflows.Workflows = append(i.ClosedWorkflows.Workflows, wf)
 				i.ClosedWorkflows.Count = i.ClosedWorkflows.Count + 1
 				i.Dashboard.Complete = i.Dashboard.Complete + 1
 			}
 
 			if i.setIsWorkflowOverdueState() {
+				log.Printf("Workflow %s Target is MISSED", wf.XDW_Key)
 				i.OverdueWorkflows.Workflows = append(i.OverdueWorkflows.Workflows, wf)
 				i.OverdueWorkflows.Count = i.OverdueWorkflows.Count + 1
 				i.Dashboard.TargetMissed = i.Dashboard.TargetMissed + 1
 			} else {
 				if i.XDWDocument.WorkflowStatus == tukcnst.CLOSED {
+					log.Printf("Workflow %s Target is MET", wf.XDW_Key)
 					i.TargetMetWorkflows.Workflows = append(i.TargetMetWorkflows.Workflows, wf)
 					i.TargetMetWorkflows.Count = i.TargetMetWorkflows.Count + 1
 					i.Dashboard.TargetMet = i.Dashboard.TargetMet + 1
 				}
-			}
-			if i.XDWDocument.WorkflowStatus == tukcnst.OPEN && i.IsWorkflowEscalated() {
-				i.EscalteWorkflows.Workflows = append(i.EscalteWorkflows.Workflows, wf)
-				i.EscalteWorkflows.Count = i.EscalteWorkflows.Count + 1
-				i.Dashboard.Escalated = i.Dashboard.Escalated + 1
 			}
 		}
 	}
@@ -1533,7 +1543,12 @@ func (i *Transaction) PersistXDWDefinition() error {
 	return err
 }
 func GetWorkflowDefinitionNames() []string {
-	return tukdbint.GetWorkflowDefinitionNames()
+	var wfnames []string
+	names := tukdbint.GetWorkflowDefinitionNames()
+	for name := range names {
+		wfnames = append(wfnames, name)
+	}
+	return wfnames
 }
 func GetWorkflowXDSMetaNames() []string {
 	return tukdbint.GetWorkflowXDSMetaNames()

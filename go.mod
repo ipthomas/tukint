@@ -9,7 +9,7 @@ require (
 	github.com/ipthomas/tukdsub v1.3.6
 	github.com/ipthomas/tukpdq v1.3.3
 	github.com/ipthomas/tukutil v1.3.3
-	github.com/ipthomas/tukxdw v1.3.2
+	github.com/ipthomas/tukxdw v1.3.3
 
 )
 
