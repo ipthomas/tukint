@@ -372,7 +372,7 @@ func loadFile(file fs.DirEntry, folder string) []byte {
 	}
 	return fileBytes
 }
-func persistServiceConfigs() {
+func PersistServiceConfigs() {
 	log.Println("Processing Event Service Config Files")
 	if srvcs, err := tukutil.GetFolderFiles(Basepath + "services/"); err == nil {
 		for _, file := range srvcs {
@@ -391,7 +391,7 @@ func persistServiceConfigs() {
 		}
 	}
 }
-func persistTemplates() {
+func PersistTemplates() {
 	if xmlTmplts, err := tukutil.GetFolderFiles(Basepath + "templates/xml/"); err == nil {
 		for _, file := range xmlTmplts {
 			if strings.HasSuffix(file.Name(), ".xml") {
@@ -429,7 +429,7 @@ func persistTemplates() {
 		}
 	}
 }
-func persistXDWConfigs() {
+func PersistXDWConfigs() {
 	log.Println("Processing XDW Config Files")
 	if xdwconfigs, err := tukutil.GetFolderFiles(Basepath + "xdwconfig/"); err == nil {
 		for _, file := range xdwconfigs {
@@ -1287,13 +1287,13 @@ func (i *TukEvent) AdminSpaWidget() []byte {
 	case tukcnst.TUK_TASK_RESTART:
 		InitTuki()
 	case tukcnst.TUK_TASK_INIT_SERVICES:
-		persistServiceConfigs()
+		PersistServiceConfigs()
 		InitTuki()
 	case tukcnst.TUK_TASK_INIT_TEMPLATES:
-		persistTemplates()
+		PersistTemplates()
 		InitTuki()
 	case tukcnst.TUK_TASK_INIT_XDWS:
-		persistXDWConfigs()
+		PersistXDWConfigs()
 		InitTuki()
 	}
 	if err := i.EventServices.HTMLTemplates.ExecuteTemplate(&tplReturn, tukcnst.TUK_TEMPLATE_ADMIN_SPA_WIDGET, i); err != nil {
