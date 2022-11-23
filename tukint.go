@@ -472,7 +472,8 @@ func (i *TukEvent) TaskNotes(task string) string {
 func (i *TukEvent) ElapsedTime() string {
 	st := tukutil.GetTimeFromString(i.XDWWorkflowDocument.EffectiveTime.Value)
 	timenow := time.Now().Local()
-	elapsedTime := i.PrettyTime(timenow.Sub(st).String())
+	duration := timenow.Sub(st)
+	elapsedTime := tukutil.PrettyPrintDuration(duration)
 	log.Printf("Elapsed time for workflow %s nhs id %s version %v is %s", i.XDWWorkflowDocument.WorkflowDefinitionReference, i.XDWWorkflowDocument.Patient.ID.Extension, i.Vers, elapsedTime)
 	return elapsedTime
 }
