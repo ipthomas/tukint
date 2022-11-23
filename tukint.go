@@ -469,14 +469,12 @@ func (i *TukEvent) GetMappedId(lid string) string {
 func (i *TukEvent) TaskNotes(task string) string {
 	return tukxdw.GetTaskNotes(i.Pathway, i.NHSId, tukutil.GetIntFromString(task), i.Vers)
 }
-func (i *TukEvent) ElapsedTime(wf tukdbint.Workflow) string {
-	xdwdoc := tukxdw.XDWWorkflowDocument{}
-	if err := xml.Unmarshal([]byte(wf.XDW_Doc), &xdwdoc); err != nil {
-		log.Println(err.Error())
-		return tukutil.Time_Now()
-	}
-	log.Printf("Calculating elapsed time for workflow %s nhs id %s version %v started %s", xdwdoc.WorkflowDefinitionReference, xdwdoc.Patient.ID.Extension, i.Vers, xdwdoc.EffectiveTime.Value)
-	return xdwdoc.GetWorkflowDuration()
+func (i *TukEvent) ElapsedTime() string {
+	st := tukutil.GetTimeFromString(i.XDWWorkflowDocument.EffectiveTime.Value)
+	timenow := time.Now().Local()
+	elapsedTime := i.PrettyTime(timenow.Sub(st).String())
+	log.Printf("Elapsed time for workflow %s nhs id %s version %v is %s", i.XDWWorkflowDocument.WorkflowDefinitionReference, i.XDWWorkflowDocument.Patient.ID.Extension, i.Vers, elapsedTime)
+	return elapsedTime
 }
 func (i *TukEvent) LastUpdateTime() string {
 	return i.PrettyTime(i.XDWWorkflowDocument.GetLatestWorkflowEventTime().String())
@@ -488,7 +486,6 @@ func (i *TukEvent) TaskCompleteByTimeString(taskid string) string {
 	log.Printf("Obtaining Workflow Task %s Complete By date", taskid)
 	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition, Task_ID: tukutil.GetIntFromString(taskid)}
 	return i.PrettyTime(trans.GetTaskCompleteByDate().String())
-	//return strings.Split(trans.GetTaskCompleteByDate().String(), " +")[0]
 }
 func (i *TukEvent) TaskDuration(taskid string) string {
 	log.Printf("Obtaining task %s duration", taskid)
