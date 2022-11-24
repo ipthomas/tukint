@@ -372,6 +372,15 @@ func loadFile(file fs.DirEntry, folder string) []byte {
 	}
 	return fileBytes
 }
+func InitDatabase(mysqlFile string) {
+	log.Println("Initialising Event Management Service Database")
+	tukdbint.DBConn.Close()
+	dbconn := tukdbint.TukDBConnection{DBUser: os.Getenv(tukcnst.ENV_DB_USER), DBPassword: os.Getenv(tukcnst.ENV_DB_PASSWORD), DBHost: os.Getenv(tukcnst.ENV_DB_HOST), DBPort: os.Getenv(tukcnst.ENV_DB_PORT), DBName: tukcnst.ENV_DB_NAME}
+	if err := dbconn.InitialiseDatabase(Basepath + mysqlFile); err != nil {
+		log.Println(err.Error())
+		return
+	}
+}
 func PersistServiceConfigs() {
 	log.Println("Processing Event Service Config Files")
 	if srvcs, err := tukutil.GetFolderFiles(Basepath + "services/"); err == nil {

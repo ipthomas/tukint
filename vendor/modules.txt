@@ -10,7 +10,7 @@ github.com/google/uuid
 # github.com/ipthomas/tukcnst v1.3.3
 ## explicit; go 1.19
 github.com/ipthomas/tukcnst
-# github.com/ipthomas/tukdbint v1.3.5
+# github.com/ipthomas/tukdbint v1.3.7
 ## explicit; go 1.19
 github.com/ipthomas/tukdbint
 # github.com/ipthomas/tukdsub v1.3.7

@@ -1,16 +1,20 @@
 package tukdbint
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/ipthomas/tukcnst"
-	"github.com/ipthomas/tukhttp"
 	"log"
+	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/ipthomas/tukcnst"
+	"github.com/ipthomas/tukhttp"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -174,6 +178,48 @@ func (e EventsList) Swap(i, j int) {
 	e[i], e[j] = e[j], e[i]
 }
 
+func (i *TukDBConnection) InitialiseDatabase(mysqlFile string) error {
+	if DBConn != nil {
+		DBConn.Close()
+	}
+	var err error
+	i.setDBCredentials()
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/",
+		i.DBUser,
+		i.DBPassword,
+		i.DBHost+i.DBPort)
+	log.Println("Opening DB Connection to mysql instance via DSN - " + dsn)
+	DBConn, err = sql.Open(tukcnst.MYSQL, dsn)
+	if err != nil {
+		log.Printf("Error %s when Opening DB Connection\n", err)
+		return err
+	}
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+	_, err = DBConn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+i.DBName)
+	DBConn.Close()
+
+	return i.InitialiseDBTables(mysqlFile)
+}
+func (i *TukDBConnection) InitialiseDBTables(mysqlFile string) error {
+	cmd := exec.Command("/usr/local/mysql/bin/mysql", "-h"+i.DBHost, "-P"+i.DBPort,
+		"-u"+i.DBUser, "-p"+i.DBPassword, "-D"+i.DBName)
+	dump, dump_err := os.Open(mysqlFile)
+	if dump_err != nil {
+		return dump_err
+	}
+	cmd.Stdin = dump
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("Error executing query. Command Output: %+v\n: %+v, %v", out.String(), stderr.String(), err)
+		return err
+	}
+	return nil
+}
+
 type TUK_DB_Interface interface {
 	newEvent() error
 }
@@ -192,34 +238,9 @@ func (i *TukDBConnection) newEvent() error {
 		log.Println("Database API URL provided. Will connect to mysql instance via AWS API Gateway url " + i.DB_URL)
 		DB_URL = i.DB_URL
 	} else {
-		if i.DBUser == "" {
-			i.DBUser = "root"
-		}
-		if i.DBPassword == "" {
-			i.DBPassword = "rootPass"
-		}
-		if i.DBHost == "" {
-			i.DBHost = "localhost"
-		}
-		if !strings.HasPrefix(i.DBPort, ":") {
-			i.DBPort = ":" + i.DBPort
-		}
+		i.setDBCredentials()
 		if i.DBName == "" {
 			i.DBName = "tuk"
-		}
-		if i.DBTimeout == "" {
-			i.DBTimeout = "5s"
-		} else {
-			if !strings.HasSuffix(i.DBTimeout, "s") {
-				i.DBTimeout = i.DBTimeout + "s"
-			}
-		}
-		if i.DBReadTimeout == "" {
-			i.DBReadTimeout = "2s"
-		} else {
-			if !strings.HasSuffix(i.DBReadTimeout, "s") {
-				i.DBReadTimeout = i.DBReadTimeout + "s"
-			}
 		}
 		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&timeout=%s&readTimeout=%s",
 			i.DBUser,
@@ -233,6 +254,35 @@ func (i *TukDBConnection) newEvent() error {
 	}
 
 	return err
+}
+
+func (i *TukDBConnection) setDBCredentials() {
+	if i.DBUser == "" {
+		i.DBUser = "root"
+	}
+	if i.DBPassword == "" {
+		i.DBPassword = "rootPass"
+	}
+	if i.DBHost == "" {
+		i.DBHost = "localhost"
+	}
+	if !strings.HasPrefix(i.DBPort, ":") {
+		i.DBPort = ":" + i.DBPort
+	}
+	if i.DBTimeout == "" {
+		i.DBTimeout = "5s"
+	} else {
+		if !strings.HasSuffix(i.DBTimeout, "s") {
+			i.DBTimeout = i.DBTimeout + "s"
+		}
+	}
+	if i.DBReadTimeout == "" {
+		i.DBReadTimeout = "2s"
+	} else {
+		if !strings.HasSuffix(i.DBReadTimeout, "s") {
+			i.DBReadTimeout = i.DBReadTimeout + "s"
+		}
+	}
 }
 func GetSubscriptions(brokerref string, pathway string, expression string) Subscriptions {
 	subs := Subscriptions{Action: tukcnst.SELECT}
