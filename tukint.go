@@ -206,6 +206,19 @@ func InitTuki() {
 		LogFile.Close()
 		os.Exit(1)
 	}
+	Regoid = os.Getenv(tukcnst.ENV_REG_OID)
+	if Regoid == "" {
+		log.Printf("No Regional OID set in Environment Var %s. Checking for Event Service IDMapping", tukcnst.ENV_REG_OID)
+		Regoid = tukdbint.GetIDMapsLocalId(tukcnst.XDSDOMAIN)
+		log.Printf("IDMap Query returned %s", Regoid)
+		if Regoid != tukcnst.XDSDOMAIN {
+			log.Printf("Set Regional OID %s from Event Service Code System", Regoid)
+		} else {
+			log.Println("Warning. Unabable to obtain Regional OID")
+		}
+	} else {
+		log.Printf("Set Regional OID %s from Environment Var %s", Regoid, tukcnst.ENV_REG_OID)
+	}
 }
 func SetEventServiceState() error {
 	log.Println("Initialising Service States")
@@ -281,7 +294,7 @@ func (i *EventServices) SetEventServicesStates() error {
 	}
 	i.WorkflowDefinitions = tukxdw.GetWorkflowDefinitionNames()
 	i.WorkflowXDWMeta = tukxdw.GetWorkflowXDSMetaNames()
-	i.initGlobVars()
+	i.ActivePathways = tukxdw.GetActiveWorkflowNames()
 	log.Printf("Initialised %v Event Services", len(i.ServiceConfigs))
 	return err
 }
@@ -327,22 +340,7 @@ func (i *EventServices) loadServiceConfig(srvc string) error {
 	}
 	return err
 }
-func (i *EventServices) initGlobVars() {
-	Regoid = os.Getenv(tukcnst.ENV_REG_OID)
-	if Regoid == "" {
-		log.Printf("No Regional OID set in Environment Var %s. Checking for Event Service IDMapping", tukcnst.ENV_REG_OID)
-		Regoid = tukdbint.GetIDMapsLocalId(tukcnst.XDSDOMAIN)
-		log.Printf("IDMap Query returned %s", Regoid)
-		if Regoid != tukcnst.XDSDOMAIN {
-			log.Printf("Set Regional OID %s from Event Service Code System", Regoid)
-		} else {
-			log.Println("Warning. Unabable to obtain Regional OID")
-		}
-	} else {
-		log.Printf("Set Regional OID %s from Environment Var %s", Regoid, tukcnst.ENV_REG_OID)
-	}
-	i.ActivePathways = tukxdw.GetActiveWorkflowNames()
-}
+
 func (i *EventServices) HandleBrokerNotification(body string) []byte {
 	log.Println("Event is IHE DSUB Notification Message")
 	dsubevent := tukdsub.DSUBEvent{
