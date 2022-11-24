@@ -205,7 +205,7 @@ func (i *TukDBConnection) InitialiseDatabase(mysqlFile string) error {
 	return i.InitialiseDBTables(mysqlFile)
 }
 func (i *TukDBConnection) InitialiseDBTables(mysqlFile string) error {
-	cmd := exec.Command("/usr/local/bin/mysql", "-h"+i.DBHost, "-P"+i.DBPort,
+	cmd := exec.Command("/usr/local/bin/mysql", "-h"+i.DBHost, "-P"+strings.TrimPrefix(i.DBPort, ":"),
 		"-u"+i.DBUser, "-p"+i.DBPassword, "-D"+i.DBName)
 	dump, dump_err := os.Open(mysqlFile)
 	if dump_err != nil {
