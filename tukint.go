@@ -190,15 +190,20 @@ func init() {
 		configFile = strings.TrimSuffix(configFile, ".json")
 	}
 	log.Printf("Environment Var 'TUK_CONFIG_FILE' not set. configFile set to %s", configFile)
-	LogFile = tukutil.CreateLog(tukcnst.DEFAULT_TUK_SERVICE_LOG_FOLDER)
 }
 func InitTuki() {
 	var err error
+	lenabled, _ := strconv.ParseBool(os.Getenv("Log_Enabled"))
+	if lenabled {
+		LogFile = tukutil.CreateLog(tukcnst.DEFAULT_TUK_SERVICE_LOG_FOLDER)
+	}
 	if err = SetEventServiceState(); err == nil {
 		err = cacheTemplates()
 	}
 	if err != nil {
 		log.Println(err.Error())
+		tukdbint.DBConn.Close()
+		LogFile.Close()
 		os.Exit(1)
 	}
 }
