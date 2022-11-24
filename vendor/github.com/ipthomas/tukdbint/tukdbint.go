@@ -198,11 +198,14 @@ func (i *TukDBConnection) InitialiseDatabase(mysqlFile string) error {
 	defer cancelfunc()
 	_, err = DBConn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+i.DBName)
 	DBConn.Close()
-
+	if err != nil {
+		log.Printf("Error %s when Opening DB Connection\n", err)
+		return err
+	}
 	return i.InitialiseDBTables(mysqlFile)
 }
 func (i *TukDBConnection) InitialiseDBTables(mysqlFile string) error {
-	cmd := exec.Command("/usr/local/mysql/bin/mysql", "-h"+i.DBHost, "-P"+i.DBPort,
+	cmd := exec.Command("/usr/local/bin/mysql", "-h"+i.DBHost, "-P"+i.DBPort,
 		"-u"+i.DBUser, "-p"+i.DBPassword, "-D"+i.DBName)
 	dump, dump_err := os.Open(mysqlFile)
 	if dump_err != nil {
