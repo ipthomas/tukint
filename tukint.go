@@ -22,6 +22,7 @@ import (
 	"github.com/ipthomas/tukcnst"
 	"github.com/ipthomas/tukdbint"
 	"github.com/ipthomas/tukdsub"
+	"github.com/ipthomas/tukhttp"
 	"github.com/ipthomas/tukpdq"
 	"github.com/ipthomas/tukutil"
 	"github.com/ipthomas/tukxdw"
@@ -197,6 +198,8 @@ func InitTuki() {
 	lenabled, _ := strconv.ParseBool(os.Getenv("Log_Enabled"))
 	if lenabled {
 		LogFile = tukutil.CreateLog(tukcnst.DEFAULT_TUK_SERVICE_LOG_FOLDER)
+	} else {
+		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	}
 	if err = SetEventServiceState(); err == nil {
 		err = cacheTemplates()
@@ -207,6 +210,9 @@ func InitTuki() {
 		LogFile.Close()
 		os.Exit(1)
 	}
+	tukhttp.DebugMode = Services.EventService.Debugmode
+	tukdbint.DebugMode = Services.EventService.Debugmode
+	tukpdq.Debugmode = Services.EventService.Debugmode
 	Regoid = os.Getenv(tukcnst.ENV_REG_OID)
 	if Regoid == "" {
 		l(fmt.Sprintf("No Regional OID set in Environment Var %s. Checking for Event Service IDMapping", tukcnst.ENV_REG_OID), false)
