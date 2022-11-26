@@ -210,9 +210,11 @@ func InitTuki() {
 		LogFile.Close()
 		os.Exit(1)
 	}
+	tukutil.DebugMode = Services.EventService.Debugmode
 	tukhttp.DebugMode = Services.EventService.Debugmode
 	tukdbint.DebugMode = Services.EventService.Debugmode
 	tukpdq.DebugMode = Services.EventService.Debugmode
+	tukxdw.DebugMode = Services.EventService.Debugmode
 	Regoid = os.Getenv(tukcnst.ENV_REG_OID)
 	if Regoid == "" {
 		l(fmt.Sprintf("No Regional OID set in Environment Var %s. Checking for Event Service IDMapping", tukcnst.ENV_REG_OID), false)
