@@ -210,11 +210,7 @@ func InitTuki() {
 		LogFile.Close()
 		os.Exit(1)
 	}
-	tukutil.DebugMode = Services.EventService.Debugmode
-	tukhttp.DebugMode = Services.EventService.Debugmode
-	tukdbint.DebugMode = Services.EventService.Debugmode
-	tukpdq.DebugMode = Services.EventService.Debugmode
-	tukxdw.DebugMode = Services.EventService.Debugmode
+	setLogLevel()
 	Regoid = os.Getenv(tukcnst.ENV_REG_OID)
 	if Regoid == "" {
 		l(fmt.Sprintf("No Regional OID set in Environment Var %s. Checking for Event Service IDMapping", tukcnst.ENV_REG_OID), false)
@@ -228,6 +224,15 @@ func InitTuki() {
 	} else {
 		l(fmt.Sprintf("Set Regional OID %s from Environment Var %s", Regoid, tukcnst.ENV_REG_OID), false)
 	}
+}
+
+func setLogLevel() {
+	DebugMode = Services.EventService.Debugmode
+	tukutil.DebugMode = DebugMode
+	tukhttp.DebugMode = DebugMode
+	tukdbint.DebugMode = DebugMode
+	tukpdq.DebugMode = DebugMode
+	tukxdw.DebugMode = DebugMode
 }
 func SetEventServiceState() error {
 	l("Initialising Service States", true)
@@ -323,6 +328,8 @@ func (i *EventServices) loadServiceConfig(srvc string) error {
 		case configFile:
 			i.EventService = srvcState
 			i.EventService.setServiceWSE()
+			DebugMode = i.EventService.Debugmode
+			setLogLevel()
 			i.ServiceConfigs = append(i.ServiceConfigs, i.EventService.Id)
 		case i.EventService.BrokerSrvc:
 			i.BrokerService = srvcState
