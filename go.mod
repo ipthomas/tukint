@@ -10,7 +10,7 @@ require (
 	github.com/ipthomas/tukhttp v1.3.5
 	github.com/ipthomas/tukpdq v1.3.5
 	github.com/ipthomas/tukutil v1.3.5
-	github.com/ipthomas/tukxdw v1.3.6
+	github.com/ipthomas/tukxdw v1.3.7
 
 )
 

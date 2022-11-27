@@ -938,7 +938,7 @@ func (i *XDWWorkflowDocument) GetLatestWorkflowEventTime() time.Time {
 	return trans.XDWState.LatestWorkflowEventTime
 }
 func (i *Transaction) setWorkflowLatestEventTime() {
-	log.Printf("Setting Latest Workflow Event Time for Pathway %s NHS ID %s", i.Pathway, i.NHS_ID)
+	l(fmt.Sprintf("Setting Latest Workflow Event Time for Pathway %s NHS ID %s", i.Pathway, i.NHS_ID), true)
 	i.XDWState.LatestWorkflowEventTime = tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
 	for _, task := range i.XDWDocument.TaskList.XDWTask {
 		for _, taskevent := range task.TaskEventHistory.TaskEvent {
@@ -1007,7 +1007,7 @@ func NewEventID(wfdoc XDWWorkflowDocument, wfmeta XDSDocumentMeta, pathway strin
 		Expression:         expression,
 		Authors:            wfdoc.Author.AssignedAuthor.AssignedPerson.Name.Prefix + " " + wfdoc.Author.AssignedAuthor.AssignedPerson.Name.Family,
 		XdsPid:             "NA",
-		XdsDocEntryUid:     wfdoc.ID.Root,
+		XdsDocEntryUid:     wfdoc.ID.Extension,
 		RepositoryUniqueId: wfmeta.Repositoryuniqueid,
 		NhsId:              nhs,
 		User:               user,
@@ -1038,8 +1038,8 @@ func (i *Transaction) newEventID() int64 {
 		PracticeCode:       i.XDSDocumentMeta.Practicesettingcode,
 		Expression:         i.Expression,
 		Authors:            i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Prefix + " " + i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Family,
-		XdsPid:             "NA",
-		XdsDocEntryUid:     i.XDWDocument.ID.Root,
+		XdsPid:             "",
+		XdsDocEntryUid:     i.XDWDocument.ID.Extension,
 		RepositoryUniqueId: i.XDSDocumentMeta.Repositoryuniqueid,
 		NhsId:              i.NHS_ID,
 		User:               i.User,

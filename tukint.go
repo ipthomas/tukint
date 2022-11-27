@@ -311,7 +311,7 @@ func (i *EventServices) loadServiceConfig(srvc string) error {
 	var err error
 	var tuksrvcState = tukdbint.ServiceState{}
 	srvc = strings.TrimSuffix(srvc, ".json")
-	l(fmt.Sprintf("Loading Service Configuration %s", srvc), true)
+	l(fmt.Sprintf("Loading Service Configuration %s", srvc), false)
 	if tuksrvcState, err = tukdbint.GetServiceState(srvc); err == nil {
 		srvcState := ServiceState{}
 		if err := json.Unmarshal([]byte(tuksrvcState.Service), &srvcState); err != nil {
@@ -345,32 +345,37 @@ func (i *EventServices) loadServiceConfig(srvc string) error {
 			i.XDSRepService.setServiceWSE()
 			i.ServiceConfigs = append(i.ServiceConfigs, i.XDSRepService.Id)
 		}
-		l("Initialised "+srvcState.Desc+" State", true)
+		l("Initialised "+srvcState.Desc+" State", false)
 	}
 	return err
 }
 
-func (i *EventServices) HandleBrokerNotification(body string) []byte {
-	l("Event is IHE DSUB Notification Message", true)
-	dsubevent := tukdsub.DSUBEvent{
-		BrokerURL:       i.BrokerService.WSE,
-		PDQ_SERVER_TYPE: i.EventService.PatientSrvc,
+func (i *TukEvent) HandleBrokerNotification() []byte {
+	l("Handling IHE DSUB Notification Message", false)
+	event := tukdsub.DSUBEvent{
+		BrokerURL:       i.EventServices.BrokerService.WSE,
+		PDQ_SERVER_TYPE: i.EventServices.EventService.PatientSrvc,
 		REG_OID:         Regoid,
-		EventMessage:    body,
+		EventMessage:    i.Body,
 	}
-	switch dsubevent.PDQ_SERVER_TYPE {
+	switch event.PDQ_SERVER_TYPE {
 	case tukcnst.PDQ_SERVER_TYPE_IHE_PDQV3:
-		dsubevent.PDQ_SERVER_URL = i.PDQv3Service.WSE
+		event.PDQ_SERVER_URL = i.EventServices.PDQv3Service.WSE
 	case tukcnst.PDQ_SERVER_TYPE_IHE_PIXM:
-		dsubevent.PDQ_SERVER_URL = i.PIXmService.WSE
+		event.PDQ_SERVER_URL = i.EventServices.PIXmService.WSE
 	}
-	if err := tukdsub.New_Transaction(&dsubevent); err != nil {
+	if err := tukdsub.New_Transaction(&event); err != nil {
 		l(err.Error(), false)
 	}
+	l("Sending Notification Message ACK to Broker", false)
 	return []byte(tukcnst.GO_TEMPLATE_DSUB_ACK)
 }
 func (i *ServiceState) setServiceWSE() {
-	i.WSE = i.Scheme + "://" + i.Host + ":" + tukutil.GetStringFromInt(i.Port) + "/" + i.Url
+	if i.Id == os.Getenv(tukcnst.ENV_TUK_CONFIG_FILE) {
+		i.WSE = i.Scheme + "://" + i.Host + ":" + tukutil.GetStringFromInt(i.Port) + "/" + i.BaseURLPath + "/" + i.EventUrl
+	} else {
+		i.WSE = i.Scheme + "://" + i.Host + ":" + tukutil.GetStringFromInt(i.Port) + "/" + i.Url
+	}
 	l(fmt.Sprintf("Set %s Event Service WSE %s", i.Desc, i.WSE), false)
 }
 func loadFile(file fs.DirEntry, folder string) []byte {
@@ -556,7 +561,7 @@ func (i *TukEvent) parsePostEvent() []byte {
 	i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.APPLICATION_XML)
 	b, _ := io.ReadAll(i.HttpRequest.Body)
 	i.Body = string(b)
-	return i.EventServices.HandleBrokerNotification(i.Body)
+	return i.HandleBrokerNotification()
 }
 func (i *TukEvent) newXDWHandler() []byte {
 	wfs := tukxdw.GetWorkflows(i.Pathway, i.NHSId, "", i.DocRef, i.Vers, false, i.Status)
@@ -935,11 +940,10 @@ func TukEventServer() {
 	l(fmt.Sprintf("Event Service set to Demo Mode : %v", demoMode), false)
 	isSecure := Services.EventService.Scheme == "https"
 	l(fmt.Sprintf("Event Service set to Secure Mode : %v", isSecure), false)
-	http.HandleFunc("/"+Services.EventService.BaseURLPath+"/"+Services.EventService.EventUrl, tukutil.WriteResponseHeaders(parseHTTPRequest, isSecure))
-	http.HandleFunc("/upload", uploadFile)
+	http.HandleFunc("/"+Services.EventService.BaseURLPath+"/"+Services.EventService.EventUrl, tukutil.WriteResponseHeaders(Handle_TUK_HTTP_Request, isSecure))
 	http.Handle("/"+Services.EventService.FilesUrl, http.StripPrefix("/"+Services.EventService.FilesUrl, http.FileServer(http.Dir(Basepath+"/"+Services.EventService.FilesPath))))
 	http.Handle(Services.EventService.BaseURLPath, http.StripPrefix(Services.EventService.BaseURLPath+Services.EventService.FilesUrl, http.FileServer(http.Dir(Basepath+"/"+Services.EventService.FilesPath))))
-	l("Inialised Event Management Handler - "+Services.EventService.Scheme+"://"+Services.EventService.Host+":"+strconv.Itoa(Services.EventService.Port)+"/"+Services.EventService.BaseURLPath+"/"+Services.EventService.EventUrl, false)
+	l("Inialised Event Management Handler - "+Services.EventService.WSE, false)
 
 	monitorApp()
 	log.Println("Initialised Application Monitor")
@@ -956,9 +960,9 @@ func startUpMessage() {
 	fmt.Println("")
 	fmt.Println("***")
 	fmt.Println("Tiani Spirit UK Event Services Server")
-	fmt.Println("Listening for Events on " + Services.EventService.Scheme + "://" + Services.EventService.Host + ":" + strconv.Itoa(Services.EventService.Port) + "/" + Services.EventService.BaseURLPath + "/" + Services.EventService.EventUrl)
+	fmt.Println("Listening for Events on "+Services.EventService.WSE, false)
 	fmt.Println("***")
-	log.Println("Listening for Events on " + Services.EventService.Scheme + "://" + Services.EventService.Host + ":" + strconv.Itoa(Services.EventService.Port) + "/" + Services.EventService.BaseURLPath + "/" + Services.EventService.EventUrl)
+	l("Listening for Events on "+Services.EventService.WSE, false)
 }
 func monitorApp() {
 	ch := make(chan os.Signal, 1)
@@ -966,16 +970,17 @@ func monitorApp() {
 	go func() {
 		signalType := <-ch
 		signal.Stop(ch)
-		fmt.Println("")
-		fmt.Println("***")
-		fmt.Println("Exit command received. Exiting...")
+		l("", false)
+		l("*********************************", false)
+		l("Exit command received. Exiting...", false)
 		switch signalType {
 		case os.Interrupt:
-			log.Println("FATAL: CTRL+C pressed")
+			l("FATAL: CTRL+C pressed", false)
 		case syscall.SIGTERM:
-			log.Println("FATAL: SIGTERM detected")
+			l("FATAL: SIGTERM detected", false)
 		}
 		tukdbint.DBConn.Close()
+		l("Closed DB connection", false)
 		LogFile.Close()
 		os.Exit(1)
 	}()
@@ -1028,13 +1033,20 @@ func Handle_AWS_API_GW_Request(ctx context.Context, request events.APIGatewayPro
 			}
 		}
 	}
-
 	l("AWS API Query Parameters\n", true)
 	for key, value := range request.QueryStringParameters {
 		l(fmt.Sprintf("    %s: %s\n", key, value), true)
 		switch key {
 		case tukcnst.TUK_EVENT_QUERY_PARAM_SAML:
 			i.SAML = value
+		case tukcnst.TUK_EVENT_QUERY_PARAM_ACT:
+			i.Act = value
+		case tukcnst.TUK_EVENT_QUERY_PARAM_TASK:
+			i.Task = value
+		case tukcnst.TUK_EVENT_QUERY_PARAM_OP:
+			i.Op = value
+		case tukcnst.TUK_EVENT_QUERY_PARAM_STATUS:
+			i.Status = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_ID:
 			if value != "" {
 				_, err := strconv.ParseInt(value, 0, 0)
@@ -1044,20 +1056,18 @@ func Handle_AWS_API_GW_Request(ctx context.Context, request events.APIGatewayPro
 					i.RowId = int64(tukutil.GetIntFromString(value))
 				}
 			}
-		case tukcnst.TUK_EVENT_QUERY_PARAM_ACT:
-			i.Act = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_TASK:
-			i.Task = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_OP:
-			i.Op = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_STATUS:
-			i.Status = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_TASK_ID:
-			i.TaskID = tukutil.GetIntFromString(value)
+			if value == "" {
+				i.TaskID = -1
+			} else {
+				i.TaskID = tukutil.GetIntFromString(value)
+			}
 		case tukcnst.TUK_EVENT_QUERY_PARAM_VERSION:
-			i.Vers = tukutil.GetIntFromString(value)
-		case tukcnst.TUK_EVENT_QUERY_PARAM_PASSWORD:
-			i.EventServices.EventService.Password = value
+			if value == "" {
+				i.Vers = -1
+			} else {
+				i.Vers = tukutil.GetIntFromString(value)
+			}
 		case tukcnst.TUK_EVENT_QUERY_PARAM_ROLE:
 			i.EventServices.EventService.Role = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_USER:
@@ -1074,20 +1084,6 @@ func Handle_AWS_API_GW_Request(ctx context.Context, request events.APIGatewayPro
 			i.Notes = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_NHS:
 			i.NHSId = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_PID:
-			i.PID = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_PID_ORG:
-			i.PIDOrg = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_GIVEN_NAME:
-			i.GivenName = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_FAMILY_NAME:
-			i.FamilyName = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_DOB:
-			i.DOB = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_ZIP:
-			i.ZIP = value
-		case tukcnst.TUK_EVENT_QUERY_PARAM_GENDER:
-			i.Gender = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_AUDIEANCE:
 			i.Audience = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_CONFIG:
@@ -1111,90 +1107,59 @@ func Handle_AWS_API_GW_Request(ctx context.Context, request events.APIGatewayPro
 	if i.ReturnXML {
 		awsHeaders[tukcnst.CONTENT_TYPE] = tukcnst.APPLICATION_XML
 	}
-
 	return events.APIGatewayProxyResponse{
 		StatusCode: i.ReturnCode,
 		Headers:    i.setAwsResponseHeaders(),
 		Body:       string(tukrsp),
 	}, nil
 }
-func parseHTTPRequest(rsp http.ResponseWriter, r *http.Request) {
-	l(fmt.Sprintf("Received http %s request", r.Method), true)
-	i := TukEvent{
-		REGOid:        Regoid,
-		EventServices: Services,
-		HttpRequest:   r,
-		HttpResponse:  rsp,
+func Handle_TUK_HTTP_Request(rsp http.ResponseWriter, req *http.Request) {
+	l(fmt.Sprintf("Received http %s request from %s. Processing New Event", req.Method, req.RemoteAddr), false)
+	i := TukEvent{REGOid: Regoid, EventServices: Services, HttpRequest: req, HttpResponse: rsp}
+	req.ParseForm()
+	i.EventServices.EventService.User = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_USER)
+	i.EventServices.EventService.Org = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ORG)
+	i.EventServices.EventService.Role = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ROLE)
+	i.Act = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ACT)
+	i.Task = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TASK)
+	i.Status = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_STATUS)
+	i.Op = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_OP)
+	i.NHSId = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_NHS)
+	i.Audience = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_AUDIEANCE)
+	i.Pathway = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_PATHWAY)
+	i.Topic = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TOPIC)
+	i.Expression = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_EXPRESSION)
+	i.Notes = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_NOTES)
+	i.ConfigStr = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_CONFIG)
+	i.DocRef = req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_DOCREF)
+	if req.Header.Get(tukcnst.ACCEPT) == tukcnst.APPLICATION_JSON || req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_FORMAT) == tukcnst.JSON {
+		i.ReturnJSON = true
 	}
-	r.ParseForm()
-	if r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ID) != "" {
-		i.RowId = int64(tukutil.GetIntFromString(r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ID)))
+	if req.Header.Get(tukcnst.ACCEPT) == tukcnst.APPLICATION_XML || req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_FORMAT) == tukcnst.XML {
+		i.ReturnXML = true
 	}
-	if r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_VERSION) != "" {
-		i.Vers = tukutil.GetIntFromString(r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_VERSION))
-	}
-	if r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TASK_ID) != "" {
-		i.TaskID = tukutil.GetIntFromString(r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TASK_ID))
-	}
-	i.Act = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ACT)
-	i.EventServices.EventService.Password = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_PASSWORD)
-	i.EventServices.EventService.Role = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ROLE)
-	i.Task = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TASK)
-	i.Status = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_STATUS)
-	i.Op = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_OP)
-	i.EventServices.EventService.User = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_USER)
-	i.EventServices.EventService.Org = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ORG)
-	i.NHSId = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_NHS)
-	i.PID = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_PID)
-	i.PIDOrg = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_PID_ORG)
-	i.FamilyName = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_FAMILY_NAME)
-	i.GivenName = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_GIVEN_NAME)
-	i.DOB = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_DOB)
-	i.Gender = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_GENDER)
-	i.ZIP = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ZIP)
-	i.Notes = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_NOTES)
-	i.Expression = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_EXPRESSION)
-	i.Topic = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TOPIC)
-	i.Pathway = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_PATHWAY)
-	i.Audience = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_AUDIEANCE)
-	i.ConfigStr = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_CONFIG)
 	if i.Audience == "" {
 		i.Audience = "N"
 	}
-	i.DocRef = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_DOCREF)
-
-	i.ReturnXML = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_FORMAT) == tukcnst.XML
-	i.ReturnJSON = r.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_FORMAT) == tukcnst.JSON
-
-	if r.Header.Get(tukcnst.ACCEPT) == tukcnst.APPLICATION_JSON {
-		i.ReturnJSON = true
+	if req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ID) != "" {
+		i.RowId = int64(tukutil.GetIntFromString(req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_ID)))
+	} else {
+		i.RowId = 0
 	}
-	if r.Header.Get(tukcnst.ACCEPT) == tukcnst.APPLICATION_XML {
-		i.ReturnXML = true
+	if req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_VERSION) != "" {
+		i.Vers = tukutil.GetIntFromString(req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_VERSION))
+	} else {
+		i.Vers = -1
 	}
-
-	i.HTTPMethod = r.Method
+	if req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TASK_ID) != "" {
+		i.TaskID = tukutil.GetIntFromString(req.FormValue(tukcnst.TUK_EVENT_QUERY_PARAM_TASK_ID))
+	} else {
+		i.TaskID = -1
+	}
+	i.HTTPMethod = req.Method
 	i.printFormValues()
 
 	i.HttpResponse.Write(i.handleRequest())
-}
-func uploadFile(w http.ResponseWriter, r *http.Request) {
-	tukutil.UploadFile(w, r)
-
-	l("Creating Workflow Attachment Event", true)
-	i := TukEvent{}
-	i.Act = "UPLOAD"
-	i.Task = "FILE"
-	i.NHSId = r.FormValue("nhs")
-	i.Pathway = r.FormValue("pathway")
-	i.Topic = "Attachment"
-	i.Expression = r.FormValue("myFile")
-	i.EventServices.EventService.User = r.FormValue("user")
-	i.EventServices.EventService.Org = r.FormValue("org")
-	i.EventServices.EventService.Role = r.FormValue("role")
-	i.Notes = "File " + r.FormValue("myFile") + " attached to Workflow"
-	l(fmt.Sprintf("Attached %s to Workflow %s", r.FormValue("myFile"), r.FormValue("pathway")), true)
-	i.createUserEvent()
 }
 func (i *TukEvent) printFormValues() {
 	if DebugMode {
