@@ -484,7 +484,7 @@ func (i *Transaction) contentUpdater() error {
 			i.XDWEvents.Events = newEvents.Events
 			i.XDWEvents.Count = len(newEvents.Events)
 			if err := i.UpdateXDWDocumentTasks(); err != nil {
-				log.Println(err.Error())
+				l(err.Error(), false)
 			}
 		}
 	}
@@ -893,7 +893,7 @@ func (i *Transaction) IsTaskOverdue() bool {
 			return false
 		}
 	}
-	log.Printf("Task %v IS overdue", i.Task_ID)
+	l(fmt.Sprintf("Task %v IS overdue", i.Task_ID), true)
 	return true
 }
 func GetTaskCompleteByDate(xdwdoc XDWWorkflowDocument, xdwdef WorkflowDefinition, task int) string {

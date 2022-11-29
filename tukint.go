@@ -175,6 +175,7 @@ var (
 )
 
 func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	Basepath = os.Getenv(tukcnst.ENV_TUK_CONFIG)
 	configFile = os.Getenv(tukcnst.ENV_TUK_CONFIG_FILE)
 	if Basepath == "" {
@@ -188,18 +189,17 @@ func init() {
 	l(fmt.Sprintf("Set BasePath = %s", Basepath), false)
 	if configFile == "" {
 		configFile = tukcnst.DEFAULT_TUK_SERVICE_CONFIG_FILE
+		l("Environment Var 'TUK_CONFIG_FILE' not set", false)
 	} else {
 		configFile = strings.TrimSuffix(configFile, ".json")
 	}
-	l(fmt.Sprintf("Environment Var 'TUK_CONFIG_FILE' not set. configFile set to %s", configFile), false)
+	l(fmt.Sprintf("Set Config file = %s", configFile), false)
 }
 func InitTuki() {
 	var err error
 	lenabled, _ := strconv.ParseBool(os.Getenv("Log_Enabled"))
 	if lenabled {
 		LogFile = tukutil.CreateLog(tukcnst.DEFAULT_TUK_SERVICE_LOG_FOLDER)
-	} else {
-		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	}
 	if err = SetEventServiceState(); err == nil {
 		err = cacheTemplates()
@@ -618,7 +618,9 @@ func (i *TukEvent) newXDWSHandler() []byte {
 	case tukcnst.TUK_STATUS_ESCALATED:
 		status = tukcnst.TUK_STATUS_OPEN
 	}
-	l(fmt.Sprintf("Retrieving XDWS with Status %s", status), true)
+	if status != "" {
+		l(fmt.Sprintf("Retrieving XDWS with Status %s", status), true)
+	}
 	wfs := tukdbint.GetWorkflows(i.Pathway, i.NHSId, "", i.DocRef, i.Vers, false, status)
 	l(fmt.Sprintf("Total Workflow Count %v", wfs.Count), true)
 	trans := tukxdw.Transaction{Workflows: wfs}
@@ -953,7 +955,7 @@ func TukEventServer() {
 	l("Inialised Event Management Handler - "+Services.EventService.WSE, false)
 
 	monitorApp()
-	log.Println("Initialised Application Monitor")
+	l("Initialised Application Monitor", false)
 	startUpMessage()
 	if isSecure {
 		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(Services.EventService.Port), Basepath+"/"+Services.EventService.CertPath+"/"+Services.EventService.Certs, Basepath+"/"+Services.EventService.CertPath+"/"+Services.EventService.Keys, nil))
@@ -962,14 +964,9 @@ func TukEventServer() {
 	}
 }
 func startUpMessage() {
-	log.Println("Starting " + Services.EventService.Desc)
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("***")
-	fmt.Println("Tiani Spirit UK Event Services Server")
-	fmt.Println("Listening for Events on "+Services.EventService.WSE, false)
-	fmt.Println("***")
-	l("Listening for Events on "+Services.EventService.WSE, false)
+	l("Starting "+Services.EventService.Desc, false)
+	l("Listening for DSUB Notifications on "+Services.EventService.WSE, false)
+	l("Testing Event Manager Home Page. "+Services.EventService.WSE+"?act=widget&task=spa&user=test&org=spirit&role=admin", false)
 }
 func monitorApp() {
 	ch := make(chan os.Signal, 1)
@@ -1179,7 +1176,7 @@ func (i *TukEvent) printFormValues() {
 // Widgets
 
 func (i *TukEvent) GetWidget() []byte {
-	log.Printf("Processing %s Widget Request", i.Task)
+	l(fmt.Sprintf("Processing %s Widget Request", i.Task), true)
 	switch i.Task {
 	case tukcnst.SPA:
 		return i.UserSpaWidget()
