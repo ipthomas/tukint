@@ -958,7 +958,7 @@ func TukEventServer() {
 	l("Initialised Application Monitor", false)
 	startUpMessage()
 	if isSecure {
-		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(Services.EventService.Port), Basepath+"/"+Services.EventService.CertPath+"/"+Services.EventService.Certs, Basepath+"/"+Services.EventService.CertPath+"/"+Services.EventService.Keys, nil))
+		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(Services.EventService.Port), Basepath+Services.EventService.CertPath+"/"+Services.EventService.Certs, Basepath+Services.EventService.CertPath+"/"+Services.EventService.Keys, nil))
 	} else {
 		log.Fatal(http.ListenAndServe(":"+strconv.Itoa(Services.EventService.Port), nil))
 	}
