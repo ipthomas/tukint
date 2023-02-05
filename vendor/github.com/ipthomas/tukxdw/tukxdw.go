@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"log"
 	"sort"
 	"strconv"
@@ -305,7 +304,7 @@ func (i *Transaction) execute() error {
 
 // IHE XDW Content Updater
 func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
-	l(fmt.Sprintf("Updating %s Workflow Version %v for NHS ID %s", pwy, vers, nhsId), true)
+	log.Printf("Updating %s Workflow Version %v for NHS ID %s", pwy, vers, nhsId)
 	wfdef := WorkflowDefinition{}
 	wfdoc := XDWWorkflowDocument{}
 	events := tukdbint.Events{}
@@ -313,32 +312,32 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 	if wfs.Count == 1 {
 		wf := wfs.Workflows[1]
 		if err := json.Unmarshal([]byte(wf.XDW_Def), &wfdef); err != nil {
-			l(err.Error(), false)
+			log.Println(err.Error())
 			return err
 		}
 		if err := xml.Unmarshal([]byte(wf.XDW_Doc), &wfdoc); err != nil {
-			l(err.Error(), false)
+			log.Println(err.Error())
 			return err
 		}
 	}
 	for taskkey, task := range wfdoc.TaskList.XDWTask {
 		events = tukdbint.GetEvents("", pwy, nhsId, "", tukutil.GetIntFromString(task.TaskData.TaskDetails.ID), vers)
-		l(fmt.Sprintf("Found %v Events for %s Workflow Task %s", events.Count, wfdef.Name, task.TaskData.TaskDetails.ID), true)
+		log.Printf("Found %v Events for %s Workflow Task %s", events.Count, wfdef.Name, task.TaskData.TaskDetails.ID)
 		for _, event := range events.Events {
 			if event.Id > 0 {
 				hasevent := false
 				for _, taskevent := range task.TaskEventHistory.TaskEvent {
 					if taskevent.ID == tukutil.GetStringFromInt(int(event.Id)) {
-						l(fmt.Sprintf("Task %s Event %v is registered. Skipping Event", task.TaskData.TaskDetails.ID, event.Id), true)
+						log.Printf("Task %s Event %v is registered. Skipping Event", task.TaskData.TaskDetails.ID, event.Id)
 						hasevent = true
 						break
 					}
 				}
 				if !hasevent {
-					l(fmt.Sprintf("Updating XDW with Event ID %v for Task ID %s", event.Id, task.TaskData.TaskDetails.ID), true)
+					log.Printf("Updating XDW with Event ID %v for Task ID %s", event.Id, task.TaskData.TaskDetails.ID)
 					for inpkey, input := range task.TaskData.Input {
 						if event.Expression == input.Part.Name {
-							l("Matched workflow document task "+task.TaskData.TaskDetails.ID+" Input Part : "+input.Part.Name+" with Event Expression : "+event.Expression+" Current Status : "+task.TaskData.TaskDetails.Status, true)
+							log.Println("Matched workflow document task " + task.TaskData.TaskDetails.ID + " Input Part : " + input.Part.Name + " with Event Expression : " + event.Expression + " Current Status : " + task.TaskData.TaskDetails.Status)
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.Input[inpkey].Part.AttachmentInfo.AttachedTime = event.Creationtime
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.Input[inpkey].Part.AttachmentInfo.AttachedBy = event.User + " " + event.Org + " " + event.Role
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.Input[inpkey].Part.AttachmentInfo.HomeCommunityId = tukdbint.GetIDMapsLocalId(tukcnst.XDSDOMAIN)
@@ -347,7 +346,7 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActualOwner = event.User + " " + event.Org + " " + event.Role
 							if wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime == "" {
 								wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime = event.Creationtime
-								l(fmt.Sprintf("Set Task %s Activation Time %s", task.TaskData.TaskDetails.ID, wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime), true)
+								log.Printf("Set Task %s Activation Time %s", task.TaskData.TaskDetails.ID, wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime)
 							}
 							if task.TaskData.Input[inpkey].Part.AttachmentInfo.AccessType == tukcnst.XDS_REGISTERED {
 								wfdoc.TaskList.XDWTask[taskkey].TaskData.Input[inpkey].Part.AttachmentInfo.Identifier = event.XdsDocEntryUid
@@ -376,7 +375,7 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 					}
 					for outpkey, output := range task.TaskData.Output {
 						if event.Expression == output.Part.Name {
-							l("Matched workflow document task "+task.TaskData.TaskDetails.ID+" Output Part : "+output.Part.Name+" with Event Expression : "+event.Expression+" Current Status : "+task.TaskData.TaskDetails.Status, true)
+							log.Println("Matched workflow document task " + task.TaskData.TaskDetails.ID + " Output Part : " + output.Part.Name + " with Event Expression : " + event.Expression + " Current Status : " + task.TaskData.TaskDetails.Status)
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.Output[outpkey].Part.AttachmentInfo.AttachedTime = event.Creationtime
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.Output[outpkey].Part.AttachmentInfo.AttachedBy = event.User + " " + event.Org + " " + event.Role
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.Output[outpkey].Part.AttachmentInfo.HomeCommunityId = tukdbint.GetIDMapsLocalId(tukcnst.XDSDOMAIN)
@@ -385,7 +384,7 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 							wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActualOwner = event.User + " " + event.Org + " " + event.Role
 							if wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime == "" {
 								wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime = event.Creationtime
-								l(fmt.Sprintf("Set Task %s Activation Time %s", task.TaskData.TaskDetails.ID, wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime), true)
+								log.Printf("Set Task %s Activation Time %s", task.TaskData.TaskDetails.ID, wfdoc.TaskList.XDWTask[taskkey].TaskData.TaskDetails.ActivationTime)
 							}
 							if task.TaskData.Output[outpkey].Part.AttachmentInfo.AccessType == tukcnst.XDS_REGISTERED {
 								wfdoc.TaskList.XDWTask[taskkey].TaskData.Output[outpkey].Part.AttachmentInfo.Identifier = event.XdsDocEntryUid
@@ -433,7 +432,7 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 		docevent.ActualStatus = tukcnst.COMPLETE
 		wfdoc.WorkflowStatusHistory.DocumentEvent = append(wfdoc.WorkflowStatusHistory.DocumentEvent, docevent)
 		wf.Status = tukcnst.CLOSED
-		l("Closed Workflow. Total Workflow Document Events "+strconv.Itoa(len(wfdoc.WorkflowStatusHistory.DocumentEvent)), false)
+		log.Println("Closed Workflow. Total Workflow Document Events " + strconv.Itoa(len(wfdoc.WorkflowStatusHistory.DocumentEvent)))
 	} else {
 		wf.Status = tukcnst.OPEN
 	}
@@ -443,31 +442,31 @@ func ContentUpdater(pwy string, vers int, nhsId string, user string) error {
 	return tukdbint.NewDBEvent(&wfs)
 }
 func (i *Transaction) contentUpdater() error {
-	l(fmt.Sprintf("Updating %s Workflow Version %v for NHS ID %s", i.Pathway, i.XDWVersion, i.NHS_ID), false)
+	log.Printf("Updating %s Workflow Version %v for NHS ID %s", i.Pathway, i.XDWVersion, i.NHS_ID)
 	i.Workflows = tukdbint.GetWorkflows(i.Pathway, i.NHS_ID, "", "", i.XDWVersion, false, "")
 	if i.Workflows.Count == 1 {
 		wf := i.Workflows.Workflows[1]
 		if err := json.Unmarshal([]byte(wf.XDW_Def), &i.XDWDefinition); err != nil {
-			l(err.Error(), false)
+			log.Println(err.Error())
 			return err
 		}
 		if err := xml.Unmarshal([]byte(wf.XDW_Doc), &i.XDWDocument); err != nil {
-			l(err.Error(), false)
+			log.Println(err.Error())
 			return err
 		}
 		i.XDWEvents = tukdbint.GetEvents("", i.Pathway, i.NHS_ID, "", -1, i.XDWVersion)
-		l(fmt.Sprintf("Processing %v Events", i.XDWEvents.Count), true)
+		log.Printf("Processing %v Events", i.XDWEvents.Count)
 		newEvents := tukdbint.Events{}
 		for _, ev := range i.XDWEvents.Events {
 			if ev.Id != 0 {
-				l(fmt.Sprintf("Processing Event ID %v Obtaining Workflow Task %v", ev.Id, ev.TaskId), true)
+				log.Printf("Processing Event ID %v Obtaining Workflow Task %v", ev.Id, ev.TaskId)
 				for _, task := range i.XDWDocument.TaskList.XDWTask {
 					if task.TaskData.TaskDetails.ID == tukutil.GetStringFromInt(ev.TaskId) {
-						l(fmt.Sprintf("Found Task %s Searching Task Events for matching event ID %v", task.TaskData.TaskDetails.ID, ev.Id), true)
+						log.Printf("Found Task %s Searching Task Events for matching event ID %v", task.TaskData.TaskDetails.ID, ev.Id)
 						hasevent := false
 						for _, taskevent := range task.TaskEventHistory.TaskEvent {
 							if taskevent.ID == tukutil.GetStringFromInt(int(ev.Id)) {
-								l(fmt.Sprintf("Task %s Event %v is registered. Skipping Event", task.TaskData.TaskDetails.ID, ev.Id), true)
+								log.Printf("Task %s Event %v is registered. Skipping Event", task.TaskData.TaskDetails.ID, ev.Id)
 								hasevent = true
 							}
 						}
@@ -479,12 +478,12 @@ func (i *Transaction) contentUpdater() error {
 			}
 		}
 		if len(newEvents.Events) > 0 {
-			l(fmt.Sprintf("Updating Workflow with %v new events", len(newEvents.Events)), true)
+			log.Printf("Updating Workflow with %v new events", len(newEvents.Events))
 			sort.Sort(eventsList(i.XDWEvents.Events))
 			i.XDWEvents.Events = newEvents.Events
 			i.XDWEvents.Count = len(newEvents.Events)
 			if err := i.UpdateXDWDocumentTasks(); err != nil {
-				l(err.Error(), false)
+				log.Println(err.Error())
 			}
 		}
 	}
@@ -510,17 +509,17 @@ func (i *Transaction) newTaskEvent(ev tukdbint.Event) {
 	i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskEventHistory.TaskEvent = append(i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskEventHistory.TaskEvent, nte)
 }
 func (i *Transaction) isInputRegistered(ev tukdbint.Event) bool {
-	l(fmt.Sprintf("Checking if Input Event for Task %s is registered", i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskData.Description), true)
+	log.Printf("Checking if Input Event for Task %s is registered", i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskData.Description)
 	for _, input := range i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskData.Input {
 		if ev.Expression == input.Part.Name {
 			if input.Part.AttachmentInfo.AccessType == tukcnst.XDS_REGISTERED {
 				if input.Part.AttachmentInfo.Identifier == ev.XdsDocEntryUid {
-					l("Event is registered. Skipping Event ", true)
+					log.Println("Event is registered. Skipping Event ")
 					return true
 				}
 			} else {
 				if input.Part.AttachmentInfo.Identifier == "/eventservice/event?act=events&id="+tukutil.GetStringFromInt(int(ev.Id)) {
-					l("Event is registered. Skipping Event ", true)
+					log.Println("Event is registered. Skipping Event ")
 					return true
 				}
 			}
@@ -529,17 +528,17 @@ func (i *Transaction) isInputRegistered(ev tukdbint.Event) bool {
 	return false
 }
 func (i *Transaction) isOutputRegistered(ev tukdbint.Event) bool {
-	l(fmt.Sprintf("Checking if Ouput Event for Task %s is registered", i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskData.Description), true)
+	log.Printf("Checking if Ouput Event for Task %s is registered", i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskData.Description)
 	for _, output := range i.XDWDocument.TaskList.XDWTask[ev.TaskId-1].TaskData.Output {
 		if ev.Expression == output.Part.Name {
 			if output.Part.AttachmentInfo.AccessType == tukcnst.XDS_REGISTERED {
 				if output.Part.AttachmentInfo.Identifier == ev.XdsDocEntryUid {
-					l("Event is registered. Skipping Event ", true)
+					log.Println("Event is registered. Skipping Event ")
 					return true
 				}
 			} else {
 				if output.Part.AttachmentInfo.Identifier == "/eventservice/event?act=events&id="+tukutil.GetStringFromInt(int(ev.Id)) {
-					l("Event is registered. Skipping Event ", true)
+					log.Println("Event is registered. Skipping Event ")
 					return true
 				}
 			}
@@ -548,15 +547,15 @@ func (i *Transaction) isOutputRegistered(ev tukdbint.Event) bool {
 	return false
 }
 func (i *Transaction) UpdateXDWDocumentTasks() error {
-	l(fmt.Sprintf("Updating %s Workflow Tasks with %v Events", i.XDWDocument.WorkflowDefinitionReference, len(i.XDWEvents.Events)), true)
+	log.Printf("Updating %s Workflow Tasks with %v Events", i.XDWDocument.WorkflowDefinitionReference, len(i.XDWEvents.Events))
 	for _, ev := range i.XDWEvents.Events {
 		for k, wfdoctask := range i.XDWDocument.TaskList.XDWTask {
-			l("Checking Workflow Document Task "+wfdoctask.TaskData.TaskDetails.Name+" for matching Events", true)
+			log.Println("Checking Workflow Document Task " + wfdoctask.TaskData.TaskDetails.Name + " for matching Events")
 			for inp, input := range wfdoctask.TaskData.Input {
 				if ev.Expression == input.Part.Name {
-					l("Matched workflow document task "+wfdoctask.TaskData.TaskDetails.ID+" Input Part : "+input.Part.Name+" with Event Expression : "+ev.Expression+" Status : "+wfdoctask.TaskData.TaskDetails.Status, true)
+					log.Println("Matched workflow document task " + wfdoctask.TaskData.TaskDetails.ID + " Input Part : " + input.Part.Name + " with Event Expression : " + ev.Expression + " Status : " + wfdoctask.TaskData.TaskDetails.Status)
 					if !i.isInputRegistered(ev) {
-						l(fmt.Sprintf("Updating XDW with Event ID %v for Task ID %s", ev.Id, wfdoctask.TaskData.TaskDetails.ID), true)
+						log.Printf("Updating XDW with Event ID %v for Task ID %s", ev.Id, wfdoctask.TaskData.TaskDetails.ID)
 						i.XDWDocument.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.AttachedTime = ev.Creationtime
 						i.XDWDocument.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.AttachedBy = ev.User + " " + ev.Org + " " + ev.Role
 						i.XDWDocument.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.HomeCommunityId = tukdbint.GetIDMapsLocalId(tukcnst.XDSDOMAIN)
@@ -565,7 +564,7 @@ func (i *Transaction) UpdateXDWDocumentTasks() error {
 						i.XDWDocument.TaskList.XDWTask[k].TaskData.TaskDetails.ActualOwner = ev.User + " " + ev.Org + " " + ev.Role
 						if i.XDWDocument.TaskList.XDWTask[k].TaskData.TaskDetails.ActivationTime == "" {
 							i.XDWDocument.TaskList.XDWTask[k].TaskData.TaskDetails.ActivationTime = ev.Creationtime
-							l(fmt.Sprintf("Set Task %s Activation Time %s", wfdoctask.TaskData.TaskDetails.ID, i.XDWDocument.TaskList.XDWTask[k].TaskData.TaskDetails.ActivationTime), true)
+							log.Printf("Set Task %s Activation Time %s", wfdoctask.TaskData.TaskDetails.ID, i.XDWDocument.TaskList.XDWTask[k].TaskData.TaskDetails.ActivationTime)
 						}
 						if wfdoctask.TaskData.Input[inp].Part.AttachmentInfo.AccessType == tukcnst.XDS_REGISTERED {
 							i.XDWDocument.TaskList.XDWTask[k].TaskData.Input[inp].Part.AttachmentInfo.Identifier = ev.XdsDocEntryUid
@@ -582,7 +581,7 @@ func (i *Transaction) UpdateXDWDocumentTasks() error {
 			}
 			for oup, output := range i.XDWDocument.TaskList.XDWTask[k].TaskData.Output {
 				if ev.Expression == output.Part.Name {
-					l("Matched workflow document task "+wfdoctask.TaskData.TaskDetails.ID+" Output Part : "+output.Part.Name+" with Event Expression : "+ev.Expression+" Status : "+wfdoctask.TaskData.TaskDetails.Status, true)
+					log.Println("Matched workflow document task " + wfdoctask.TaskData.TaskDetails.ID + " Output Part : " + output.Part.Name + " with Event Expression : " + ev.Expression + " Status : " + wfdoctask.TaskData.TaskDetails.Status)
 					if !i.isOutputRegistered(ev) {
 						i.XDWDocument.TaskList.XDWTask[k].TaskData.TaskDetails.LastModifiedTime = ev.Creationtime
 						i.XDWDocument.TaskList.XDWTask[k].TaskData.Output[oup].Part.AttachmentInfo.AttachedTime = ev.Creationtime
@@ -631,14 +630,14 @@ func (i *Transaction) UpdateXDWDocumentTasks() error {
 		for k := range i.XDWDocument.TaskList.XDWTask {
 			i.XDWDocument.TaskList.XDWTask[k].TaskData.TaskDetails.Status = tukcnst.COMPLETE
 		}
-		l("Closed Workflow. Total Workflow Document Events "+strconv.Itoa(len(i.XDWDocument.WorkflowStatusHistory.DocumentEvent)), false)
+		log.Println("Closed Workflow. Total Workflow Document Events " + strconv.Itoa(len(i.XDWDocument.WorkflowStatusHistory.DocumentEvent)))
 	}
 	return i.updateWorkflow()
 }
 
 // IHE XDW Content Creator
 func (i *Transaction) contentCreator() error {
-	l(fmt.Sprintf("Creating New Workflow for Pathway %s NHS ID %s", i.Pathway, i.NHS_ID), false)
+	log.Printf("Creating New Workflow for Pathway %s NHS ID %s", i.Pathway, i.NHS_ID)
 	var err error
 	if err = i.loadWorkflowConfig(); err == nil {
 		if err = i.deprecateWorkflow(); err == nil {
@@ -649,7 +648,7 @@ func (i *Transaction) contentCreator() error {
 	return err
 }
 func (i *Transaction) loadWorkflowConfig() error {
-	l(fmt.Sprintf("Obtaining XDS Meta for Pathway %s", i.Pathway), true)
+	log.Printf("Obtaining XDS Meta for Pathway %s", i.Pathway)
 	var err error
 	xdwmeta := tukdbint.XDW{Name: i.Pathway + "_meta", IsXDSMeta: true}
 	xdwsmeta := tukdbint.XDWS{Action: tukcnst.SELECT}
@@ -657,14 +656,14 @@ func (i *Transaction) loadWorkflowConfig() error {
 	if err = tukdbint.NewDBEvent(&xdwsmeta); err == nil {
 		if xdwsmeta.Count == 1 {
 			if err = json.Unmarshal([]byte(xdwsmeta.XDW[1].XDW), &i.XDSDocumentMeta); err == nil {
-				l(fmt.Sprintf("Loaded XDS Meta for Pathway %s", i.Pathway), true)
+				log.Printf("Loaded XDS Meta for Pathway %s", i.Pathway)
 				xdwdef := tukdbint.XDW{Name: i.Pathway, IsXDSMeta: false}
 				xdwsdef := tukdbint.XDWS{Action: tukcnst.SELECT}
 				xdwsdef.XDW = append(xdwsdef.XDW, xdwdef)
 				if err = tukdbint.NewDBEvent(&xdwsdef); err == nil {
 					if xdwsdef.Count == 1 {
 						if err = json.Unmarshal([]byte(xdwsdef.XDW[1].XDW), &i.XDWDefinition); err == nil {
-							l(fmt.Sprintf("Loaded XDW definition for Pathway %s", i.Pathway), true)
+							log.Printf("Loaded XDW definition for Pathway %s", i.Pathway)
 						}
 					}
 				} else {
@@ -676,23 +675,23 @@ func (i *Transaction) loadWorkflowConfig() error {
 		}
 	}
 	if err != nil {
-		l(err.Error(), false)
+		log.Println(err.Error())
 	}
 	return err
 }
 func (i *Transaction) deprecateWorkflow() error {
-	l(fmt.Sprintf("Deprecating any current %s Workflow for NHS ID %s", i.Pathway, i.NHS_ID), true)
+	log.Printf("Deprecating any current %s Workflow for NHS ID %s", i.Pathway, i.NHS_ID)
 	var err error
 	wfs := tukdbint.Workflows{Action: tukcnst.DEPRECATE}
 	wf := tukdbint.Workflow{XDW_Key: i.Pathway + i.NHS_ID}
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err = tukdbint.NewDBEvent(&wfs); err == nil {
-		l(fmt.Sprintf("Deprecating any current %s Workflow events for NHS ID %s", i.Pathway, i.NHS_ID), true)
+		log.Printf("Deprecating any current %s Workflow events for NHS ID %s", i.Pathway, i.NHS_ID)
 		evs := tukdbint.Events{Action: tukcnst.DEPRECATE}
 		ev := tukdbint.Event{Pathway: i.Pathway, NhsId: i.NHS_ID}
 		evs.Events = append(evs.Events, ev)
 		if err = tukdbint.NewDBEvent(&evs); err != nil {
-			l(err.Error(), false)
+			log.Println(err.Error())
 		}
 	}
 	return err
@@ -730,7 +729,7 @@ func (i *Transaction) createWorkflow() {
 		i.Expression = t.Name
 		i.Task_ID = tukutil.GetIntFromString(t.ID)
 		tevidstr := tukutil.GetStringFromInt(int(i.newEventID()))
-		l(fmt.Sprintf("Creating Workflow Task ID - %v Name - %s", t.ID, t.Name), true)
+		log.Printf("Creating Workflow Task ID - %v Name - %s", t.ID, t.Name)
 		task := XDWTask{}
 		task.TaskData.TaskDetails.ID = t.ID
 		task.TaskData.TaskDetails.TaskType = t.Tasktype
@@ -750,7 +749,7 @@ func (i *Transaction) createWorkflow() {
 			docinput.Part.AttachmentInfo.ContentType = inp.Contenttype
 			docinput.Part.AttachmentInfo.ContentCategory = tukcnst.MEDIA_TYPES
 			task.TaskData.Input = append(task.TaskData.Input, docinput)
-			l(fmt.Sprintf("Created Input Part - %s", inp.Name), true)
+			log.Printf("Created Input Part - %s", inp.Name)
 		}
 		for _, outp := range t.Output {
 			docoutput := Output{}
@@ -760,7 +759,7 @@ func (i *Transaction) createWorkflow() {
 			docoutput.Part.AttachmentInfo.ContentType = outp.Contenttype
 			docoutput.Part.AttachmentInfo.ContentCategory = tukcnst.MEDIA_TYPES
 			task.TaskData.Output = append(task.TaskData.Output, docoutput)
-			l(fmt.Sprintf("Created Output Part - %s", outp.Name), true)
+			log.Printf("Created Output Part - %s", outp.Name)
 		}
 		tev := TaskEvent{}
 		tev.EventTime = effectiveTime
@@ -770,7 +769,7 @@ func (i *Transaction) createWorkflow() {
 		tev.Status = tukcnst.XDW_TASKEVENTTYPE_COMPLETE
 		task.TaskEventHistory.TaskEvent = append(task.TaskEventHistory.TaskEvent, tev)
 		i.XDWDocument.TaskList.XDWTask = append(i.XDWDocument.TaskList.XDWTask, task)
-		l(fmt.Sprintf("Set Workflow Task Event %s %s status to %s", t.ID, tev.EventType, tev.Status), true)
+		log.Printf("Set Workflow Task Event %s %s status to %s", t.ID, tev.EventType, tev.Status)
 	}
 	docevent := DocumentEvent{}
 	docevent.Author = i.User + " " + i.Role
@@ -781,7 +780,7 @@ func (i *Transaction) createWorkflow() {
 	i.XDWDocument.WorkflowStatusHistory.DocumentEvent = append(i.XDWDocument.WorkflowStatusHistory.DocumentEvent, docevent)
 	i.Response, _ = xml.MarshalIndent(i.XDWDocument, "", "  ")
 	i.XDWVersion = 0
-	l(fmt.Sprintf("%s Created new %s Workflow for Patient %s", i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Family, i.XDWDocument.WorkflowDefinitionReference, i.NHS_ID), false)
+	log.Printf("%s Created new %s Workflow for Patient %s", i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Family, i.XDWDocument.WorkflowDefinitionReference, i.NHS_ID)
 }
 
 // IHE XDW Content Consumer
@@ -791,7 +790,7 @@ func (i *Transaction) contentConsumer() error {
 		return err
 	}
 	if i.Workflows.Count == 1 {
-		l(fmt.Sprintf("Setting %s Workflow state for Patient %s", i.XDWDocument.WorkflowDefinitionReference, i.XDWDocument.Patient.ID.Extension), true)
+		log.Printf("Setting %s Workflow state for Patient %s", i.XDWDocument.WorkflowDefinitionReference, i.XDWDocument.Patient.ID.Extension)
 		i.XDWState.Created = i.XDWDocument.EffectiveTime.Value
 		i.XDWState.Status = i.XDWDocument.WorkflowStatus
 		i.XDWState.IsPublished = i.Workflows.Workflows[1].Published
@@ -878,22 +877,22 @@ func GetTaskNotes(pwy string, nhsid string, taskid int, ver int) string {
 	return tukdbint.GetTaskNotes(pwy, nhsid, taskid, ver)
 }
 func (i *Transaction) IsTaskOverdue() bool {
-	l(fmt.Sprintf("Checking if Workflow %s Task %v is overdue", i.Pathway, i.Task_ID), true)
+	log.Printf("Checking if Workflow %s Task %v is overdue", i.Pathway, i.Task_ID)
 	completionDate := i.GetTaskCompleteByDate()
-	l(fmt.Sprintf("Task complete by time %s", completionDate), true)
+	log.Printf("Task complete by time %s", completionDate)
 	if time.Now().Local().Before(completionDate) {
-		l(fmt.Sprintf("Time Now is before Task Complete by date. Task %v is NOT overdue", i.Task_ID), true)
+		log.Printf("Time Now is before Task Complete by date. Task %v is NOT overdue", i.Task_ID)
 		return false
 	}
 	if i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.Status == tukcnst.COMPLETE {
-		l(fmt.Sprintf("Task %v is Complete. Checking latest task event time", i.Task_ID), true)
+		log.Printf("Task %v is Complete. Checking latest task event time", i.Task_ID)
 		lasteventime := tukutil.GetTimeFromString(i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.LastModifiedTime)
 		if lasteventime.Before(completionDate) {
-			l(fmt.Sprintf("Task %v was NOT overdue", i.Task_ID), true)
+			log.Printf("Task %v was NOT overdue", i.Task_ID)
 			return false
 		}
 	}
-	l(fmt.Sprintf("Task %v IS overdue", i.Task_ID), true)
+	log.Printf("Task %v IS overdue", i.Task_ID)
 	return true
 }
 func GetTaskCompleteByDate(xdwdoc XDWWorkflowDocument, xdwdef WorkflowDefinition, task int) string {
@@ -908,28 +907,28 @@ func (i *Transaction) GetTaskCompleteByDate() time.Time {
 }
 func (i *XDWWorkflowDocument) GetWorkflowDuration() string {
 	ws := tukutil.GetTimeFromString(i.EffectiveTime.Value)
-	l(fmt.Sprintf("Workflow Started %s Status %s", ws.String(), i.WorkflowStatus), true)
+	log.Printf("Workflow Started %s Status %s", ws.String(), i.WorkflowStatus)
 	we := time.Now()
-	l(fmt.Sprintf("Time Now %s", we.String()), true)
+	log.Printf("Time Now %s", we.String())
 	if i.WorkflowStatus == tukcnst.CLOSED {
 		we = i.GetLatestWorkflowEventTime()
-		l(fmt.Sprintf("Workflow is Complete. Latest Event Time was %s", we.String()), true)
+		log.Printf("Workflow is Complete. Latest Event Time was %s", we.String())
 	}
 	duration := we.Sub(ws)
-	l("Duration - "+duration.String(), true)
+	log.Println("Duration - " + duration.String())
 	return tukutil.GetDuration(ws.String(), we.String())
 }
 func (i *Transaction) SetWorkflowDuration() {
 	ws := tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
-	l(fmt.Sprintf("Workflow Started %s", ws.String()), true)
+	log.Printf("Workflow Started %s", ws.String())
 	we := time.Now()
-	l(fmt.Sprintf("Time Now %s", we.String()), true)
+	log.Printf("Time Now %s", we.String())
 	if i.XDWDocument.WorkflowStatus == tukcnst.COMPLETE {
 		we = i.XDWDocument.GetLatestWorkflowEventTime()
-		l(fmt.Sprintf("Workflow is Complete. Latest Event Time was %s", we.String()), true)
+		log.Printf("Workflow is Complete. Latest Event Time was %s", we.String())
 	}
 	i.XDWState.WorkflowDuration = we.Sub(ws)
-	l("Duration - "+i.XDWState.WorkflowDuration.String(), true)
+	log.Println("Duration - " + i.XDWState.WorkflowDuration.String())
 	i.XDWState.PrettyWorkflowDuration = tukutil.GetDuration(ws.String(), we.String())
 }
 func (i *XDWWorkflowDocument) GetLatestWorkflowEventTime() time.Time {
@@ -938,7 +937,7 @@ func (i *XDWWorkflowDocument) GetLatestWorkflowEventTime() time.Time {
 	return trans.XDWState.LatestWorkflowEventTime
 }
 func (i *Transaction) setWorkflowLatestEventTime() {
-	l(fmt.Sprintf("Setting Latest Workflow Event Time for Pathway %s NHS ID %s", i.Pathway, i.NHS_ID), true)
+	log.Printf("Setting Latest Workflow Event Time for Pathway %s NHS ID %s", i.Pathway, i.NHS_ID)
 	i.XDWState.LatestWorkflowEventTime = tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
 	for _, task := range i.XDWDocument.TaskList.XDWTask {
 		for _, taskevent := range task.TaskEventHistory.TaskEvent {
@@ -950,7 +949,7 @@ func (i *Transaction) setWorkflowLatestEventTime() {
 			}
 		}
 	}
-	l(fmt.Sprintf("Latest Workflow Event Time set to %s ", i.XDWState.LatestWorkflowEventTime.String()), true)
+	log.Printf("Latest Workflow Event Time set to %s ", i.XDWState.LatestWorkflowEventTime.String())
 }
 func (i *Transaction) updateWorkflow() error {
 	var err error
@@ -967,9 +966,9 @@ func (i *Transaction) updateWorkflow() error {
 	wf.XDW_Doc = string(xdwDocBytes)
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err = tukdbint.NewDBEvent(&wfs); err != nil {
-		l(err.Error(), false)
+		log.Println(err.Error())
 	} else {
-		l(fmt.Sprintf("Persisted Workflow Version %v for Pathway %s NHS ID %s", i.XDWVersion, i.Pathway, i.NHS_ID), true)
+		log.Printf("Persisted Workflow Version %v for Pathway %s NHS ID %s", i.XDWVersion, i.Pathway, i.NHS_ID)
 	}
 	return err
 }
@@ -990,9 +989,9 @@ func (i *Transaction) persistWorkflow() error {
 	wf.XDW_Def = string(xdwDefBytes)
 	wfs.Workflows = append(wfs.Workflows, wf)
 	if err = tukdbint.NewDBEvent(&wfs); err != nil {
-		l(err.Error(), false)
+		log.Println(err.Error())
 	} else {
-		l(fmt.Sprintf("Persisted Workflow Version %v for Pathway %s NHS ID %s", i.XDWVersion, i.Pathway, i.NHS_ID), true)
+		log.Printf("Persisted Workflow Version %v for Pathway %s NHS ID %s", i.XDWVersion, i.Pathway, i.NHS_ID)
 	}
 	return err
 }
@@ -1022,10 +1021,10 @@ func NewEventID(wfdoc XDWWorkflowDocument, wfmeta XDSDocumentMeta, pathway strin
 	evs := tukdbint.Events{Action: tukcnst.INSERT}
 	evs.Events = append(evs.Events, ev)
 	if err := tukdbint.NewDBEvent(&evs); err != nil {
-		l(err.Error(), false)
+		log.Println(err.Error())
 		return 0
 	}
-	l(fmt.Sprintf("Created Event ID :  = %v", evs.LastInsertId), true)
+	log.Printf("Created Event ID :  = %v", evs.LastInsertId)
 	return evs.LastInsertId
 }
 func (i *Transaction) newEventID() int64 {
@@ -1054,33 +1053,33 @@ func (i *Transaction) newEventID() int64 {
 	evs := tukdbint.Events{Action: tukcnst.INSERT}
 	evs.Events = append(evs.Events, ev)
 	if err := tukdbint.NewDBEvent(&evs); err != nil {
-		l(err.Error(), false)
+		log.Println(err.Error())
 		return 0
 	}
-	l(fmt.Sprintf("Created Event ID :  = %v", evs.LastInsertId), true)
+	log.Printf("Created Event ID :  = %v", evs.LastInsertId)
 	return evs.LastInsertId
 }
 func (i *Transaction) setIsWorkflowOverdueState() bool {
 	if i.XDWDefinition.CompleteByTime != "" {
 		completebyDate := i.GetWorkflowCompleteByDate()
-		l(fmt.Sprintf("Workflow Complete By Date %s", completebyDate.String()), true)
+		log.Printf("Workflow Complete By Date %s", completebyDate.String())
 		if time.Now().After(completebyDate) {
-			l(fmt.Sprintf("Time Now is after Workflow Complete By Date %s", completebyDate.String()), true)
+			log.Printf("Time Now is after Workflow Complete By Date %s", completebyDate.String())
 			if i.XDWDocument.WorkflowStatus == tukcnst.CLOSED {
-				l(fmt.Sprintf("Workflow is Complete, Obtaining latest workflow event time"), true)
+				log.Println("Workflow is Complete, Obtaining latest workflow event time")
 				i.setWorkflowLatestEventTime()
-				l(fmt.Sprintf("Workflow Latest Event Time %s. Workflow Target Met = %v", i.XDWState.LatestWorkflowEventTime.String(), i.XDWState.LatestWorkflowEventTime.Before(completebyDate)), true)
+				log.Printf("Workflow Latest Event Time %s. Workflow Target Met = %v", i.XDWState.LatestWorkflowEventTime.String(), i.XDWState.LatestWorkflowEventTime.Before(completebyDate))
 				return i.XDWState.LatestWorkflowEventTime.After(completebyDate)
 			} else {
-				l(fmt.Sprintf("Workflow is not Complete. Complete By Date is %s Workflow Target not met", completebyDate.String()), true)
+				log.Printf("Workflow is not Complete. Complete By Date is %s Workflow Target not met", completebyDate.String())
 				return false
 			}
 		} else {
-			l(fmt.Sprintf("Time Now is before Workflow Complete By Date %s. Workflow is not overdue", completebyDate.String()), true)
+			log.Printf("Time Now is before Workflow Complete By Date %s. Workflow is not overdue", completebyDate.String())
 			return false
 		}
 	}
-	l(fmt.Sprintf("Workflow definition does not specify a Complete By Time. Workflow is not overdue"), true)
+	log.Println("Workflow definition does not specify a Complete By Time. Workflow is not overdue")
 	return false
 }
 func (i *Transaction) GetWorkflowCompleteByDate() time.Time {
@@ -1095,7 +1094,7 @@ func (i *Transaction) IsWorkflowCompleteBehaviorMet() bool {
 	var completedConditions = 0
 	for _, cc := range i.XDWDefinition.CompletionBehavior {
 		if cc.Completion.Condition != "" {
-			l("Parsing Workflow Completion Condition "+cc.Completion.Condition, true)
+			log.Println("Parsing Workflow Completion Condition " + cc.Completion.Condition)
 			if strings.Contains(cc.Completion.Condition, " and ") {
 				conditions = strings.Split(cc.Completion.Condition, " and ")
 			} else {
@@ -1106,7 +1105,7 @@ func (i *Transaction) IsWorkflowCompleteBehaviorMet() bool {
 				if endMethodInd > 0 {
 					method := cc.Completion.Condition[0:endMethodInd]
 					if method != "task" {
-						l(method+" is an Invalid Workflow Completion Behaviour Condition method. Ignoring Condition", true)
+						log.Println(method + " is an Invalid Workflow Completion Behaviour Condition method. Ignoring Condition")
 						continue
 					}
 					endParamInd := strings.Index(cc.Completion.Condition, ")")
@@ -1123,10 +1122,10 @@ func (i *Transaction) IsWorkflowCompleteBehaviorMet() bool {
 		}
 	}
 	if len(conditions) == completedConditions {
-		l(fmt.Sprintf("%s Workflow for NHS ID %s is complete", i.Pathway, i.NHS_ID), true)
+		log.Printf("%s Workflow for NHS ID %s is complete", i.Pathway, i.NHS_ID)
 		return true
 	}
-	l(fmt.Sprintf("%s Workflow for NHS ID %s is not complete", i.Pathway, i.NHS_ID), true)
+	log.Printf("%s Workflow for NHS ID %s is not complete", i.Pathway, i.NHS_ID)
 	return false
 }
 func IsLatestTaskEvent(i XDWWorkflowDocument, task int, taskEventName string) bool {
@@ -1164,7 +1163,7 @@ func IsLatestTaskEvent(i XDWWorkflowDocument, task int, taskEventName string) bo
 	return false
 }
 func IsTaskCompleteBehaviorMet(i XDWWorkflowDocument, def WorkflowDefinition, task int) bool {
-	l(fmt.Sprintf("Checking if Task %v is complete", task), true)
+	log.Printf("Checking if Task %v is complete", task)
 	var conditions []string
 	var completedConditions = 0
 	for _, cond := range def.Tasks[task].CompletionBehavior {
@@ -1180,7 +1179,7 @@ func IsTaskCompleteBehaviorMet(i XDWWorkflowDocument, def WorkflowDefinition, ta
 					method := condition[0:endMethodInd]
 					endParamInd := strings.Index(condition, ")")
 					if endParamInd < endMethodInd+2 {
-						l("Invalid Condition. End bracket index invalid", false)
+						log.Println("Invalid Condition. End bracket index invalid")
 						continue
 					}
 					param := condition[endMethodInd+1 : endParamInd]
@@ -1216,36 +1215,36 @@ func IsTaskCompleteBehaviorMet(i XDWWorkflowDocument, def WorkflowDefinition, ta
 	}
 
 	if len(conditions) == completedConditions {
-		l(fmt.Sprintf("Task %v is complete", task), true)
+		log.Printf("Task %v is complete", task)
 		return true
 	}
-	l(fmt.Sprintf("Task %v is not complete", task), true)
+	log.Printf("Task %v is not complete", task)
 	return false
 }
 func (i *Transaction) IsTaskCompleteBehaviorMet() bool {
-	l(fmt.Sprintf("Checking if Task %v is complete", i.Task_ID), true)
+	log.Printf("Checking if Task %v is complete", i.Task_ID)
 	var conditions []string
 	var completedConditions = 0
 	for _, cond := range i.XDWDefinition.Tasks[i.Task_ID].CompletionBehavior {
-		l(fmt.Sprintf("Task %v Completion Condition is %s", i.Task_ID, cond), true)
+		log.Printf("Task %v Completion Condition is %s", i.Task_ID, cond)
 		if cond.Completion.Condition != "" {
 			if strings.Contains(cond.Completion.Condition, " and ") {
 				conditions = strings.Split(cond.Completion.Condition, " and ")
 			} else {
 				conditions = append(conditions, cond.Completion.Condition)
 			}
-			l(fmt.Sprintf("Checkign Task %v %v completion conditions", i.Task_ID, len(conditions)), true)
+			log.Printf("Checkign Task %v %v completion conditions", i.Task_ID, len(conditions))
 			for _, condition := range conditions {
 				endMethodInd := strings.Index(condition, "(")
 				if endMethodInd > 0 {
 					method := condition[0:endMethodInd]
 					endParamInd := strings.Index(condition, ")")
 					if endParamInd < endMethodInd+2 {
-						l("Invalid Condition. End bracket index invalid", false)
+						log.Println("Invalid Condition. End bracket index invalid")
 						continue
 					}
 					param := condition[endMethodInd+1 : endParamInd]
-					l(fmt.Sprintf("Completion condition is %s", method), true)
+					log.Printf("Completion condition is %s", method)
 					switch method {
 					case "output":
 						for _, op := range i.XDWDocument.TaskList.XDWTask[i.Task_ID].TaskData.Output {
@@ -1277,10 +1276,10 @@ func (i *Transaction) IsTaskCompleteBehaviorMet() bool {
 		}
 	}
 	if len(conditions) == completedConditions {
-		l(fmt.Sprintf("Task %v is complete", i.Task_ID), true)
+		log.Printf("Task %v is complete", i.Task_ID)
 		return true
 	}
-	l(fmt.Sprintf("Task %v is not complete", i.Task_ID), true)
+	log.Printf("Task %v is not complete", i.Task_ID)
 	return false
 }
 func GetLatestTaskEventTime(i XDWWorkflowDocument, task string) time.Time {
@@ -1290,7 +1289,7 @@ func GetLatestTaskEventTime(i XDWWorkflowDocument, task string) time.Time {
 		if in.Part.AttachmentInfo.AttachedTime != "" {
 			inputtime := tukutil.GetTimeFromString(in.Part.AttachmentInfo.AttachedTime)
 			if inputtime.After(latestTaskEventTime) {
-				l(fmt.Sprintf("Updating Latest Task Event Time %s to later Input Time %s", latestTaskEventTime, inputtime), true)
+				log.Printf("Updating Latest Task Event Time %s to later Input Time %s", latestTaskEventTime, inputtime)
 				latestTaskEventTime = inputtime
 			}
 		}
@@ -1299,7 +1298,7 @@ func GetLatestTaskEventTime(i XDWWorkflowDocument, task string) time.Time {
 		if op.Part.AttachmentInfo.AttachedTime != "" {
 			outputtime := tukutil.GetTimeFromString(op.Part.AttachmentInfo.AttachedTime)
 			if outputtime.After(latestTaskEventTime) {
-				l(fmt.Sprintf("Updating Latest Task Event Time %s to later Output Time %s", latestTaskEventTime, outputtime), true)
+				log.Printf("Updating Latest Task Event Time %s to later Output Time %s", latestTaskEventTime, outputtime)
 				latestTaskEventTime = outputtime
 			}
 		}
@@ -1331,47 +1330,47 @@ func (i *Transaction) getLatestTaskEvent() string {
 }
 func (i *Transaction) GetTaskDuration() string {
 	taskCreationTime := tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
-	l(fmt.Sprintf("Task %v Creation Time %s", i.Task_ID, taskCreationTime.String()), true)
+	log.Printf("Task %v Creation Time %s", i.Task_ID, taskCreationTime.String())
 	if i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.Status == tukcnst.COMPLETE {
-		l(fmt.Sprintf("Workflow Task %s is complete", i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.Name), true)
+		log.Printf("Workflow Task %s is complete", i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.Name)
 		lastEvent := tukutil.GetTimeFromString(i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.LastModifiedTime)
-		l(fmt.Sprintf("Lastest Task Event %s", lastEvent.String()), true)
+		log.Printf("Lastest Task Event %s", lastEvent.String())
 		duration := lastEvent.Sub(taskCreationTime)
-		l(fmt.Sprintf("Task %v %s Created %s Status is COMPLETE Duration - %s", i.Task_ID, i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.Description, taskCreationTime.String(), duration.String()), true)
+		log.Printf("Task %v %s Created %s Status is COMPLETE Duration - %s", i.Task_ID, i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.Description, taskCreationTime.String(), duration.String())
 		return tukutil.PrettyPrintDuration(duration)
 	} else {
 		duration := time.Since(taskCreationTime)
-		l(fmt.Sprintf("Task %v %s Created %s Status is %s Duration - %s", i.Task_ID, i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.Description, taskCreationTime.String(), i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.Status, duration.String()), true)
+		log.Printf("Task %v %s Created %s Status is %s Duration - %s", i.Task_ID, i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.Description, taskCreationTime.String(), i.XDWDocument.TaskList.XDWTask[i.Task_ID-1].TaskData.TaskDetails.Status, duration.String())
 		return tukutil.PrettyPrintDuration(duration)
 	}
 }
 func (i *Transaction) GetTaskTimeRemaining() string {
 	taskCreateTime := tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
 	taskCompleteby := tukutil.OHT_FutureDate(taskCreateTime, i.XDWDefinition.Tasks[i.Task_ID-1].CompleteByTime)
-	l(fmt.Sprintf("Completion time %s", taskCompleteby.String()), true)
+	log.Printf("Completion time %s", taskCompleteby.String())
 	if time.Now().After(taskCompleteby) {
 		return "0"
 	}
 	timeRemaining := taskCompleteby.Sub(taskCreateTime)
-	l("Task Time Remaining : "+timeRemaining.String(), true)
+	log.Println("Task Time Remaining : " + timeRemaining.String())
 	return tukutil.PrettyPrintDuration(timeRemaining)
 }
 func (i *Transaction) GetWorkflowTimeRemaining() string {
 	createTime := tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value)
 	completeby := tukutil.OHT_FutureDate(createTime, i.XDWDefinition.CompleteByTime)
-	l(fmt.Sprintf("Completion time %s", completeby.String()), true)
+	log.Printf("Completion time %s", completeby.String())
 	if time.Now().After(completeby) {
 		return "0"
 	}
 	timeRemaining := time.Until(completeby)
-	l("Workflow Time Remaining : "+timeRemaining.String(), true)
+	log.Println("Workflow Time Remaining : " + timeRemaining.String())
 	return tukutil.PrettyPrintDuration(timeRemaining)
 }
 func getLocalId(mid string) string {
 	return tukdbint.GetIDMapsLocalId(mid)
 }
 func (i *Transaction) setXDWStates() error {
-	l("Setting XDW States", true)
+	log.Println("Setting XDW States")
 	i.Workflows = tukdbint.Workflows{Action: tukcnst.SELECT}
 	wf := tukdbint.Workflow{Pathway: i.Pathway, NHSId: i.NHS_ID, Version: i.XDWVersion}
 	i.Workflows.Workflows = append(i.Workflows.Workflows, wf)
@@ -1380,11 +1379,11 @@ func (i *Transaction) setXDWStates() error {
 	i.XDWEvents.Events = append(i.XDWEvents.Events, ev)
 
 	if err := tukdbint.NewDBEvent(&i.Workflows); err != nil {
-		l(err.Error(), false)
+		log.Println(err.Error())
 		return err
 	}
 	if err := tukdbint.NewDBEvent(&i.XDWEvents); err != nil {
-		l(err.Error(), false)
+		log.Println(err.Error())
 		return err
 	}
 
@@ -1395,40 +1394,40 @@ func (i *Transaction) SetDashboardState() error {
 	for _, wf := range i.Workflows.Workflows {
 		if len(wf.XDW_Doc) > 0 {
 			if err := xml.Unmarshal([]byte(wf.XDW_Doc), &i.XDWDocument); err != nil {
-				l(err.Error(), false)
+				log.Println(err.Error())
 				return err
 			}
-			l(fmt.Sprintf("%s Workflow Status is %s", wf.XDW_Key, i.XDWDocument.WorkflowStatus), true)
+			log.Printf("%s Workflow Status is %s", wf.XDW_Key, i.XDWDocument.WorkflowStatus)
 			if err := json.Unmarshal([]byte(wf.XDW_Def), &i.XDWDefinition); err != nil {
-				l(err.Error(), false)
+				log.Println(err.Error())
 				return err
 			}
 			if i.XDWDocument.WorkflowStatus == tukcnst.OPEN {
-				l(fmt.Sprintf("Workflow %s is OPEN", wf.XDW_Key), true)
+				log.Printf("Workflow %s is OPEN", wf.XDW_Key)
 				i.OpenWorkflows.Workflows = append(i.OpenWorkflows.Workflows, wf)
 				i.OpenWorkflows.Count = i.OpenWorkflows.Count + 1
 				i.Dashboard.InProgress = i.Dashboard.InProgress + 1
 				if i.IsWorkflowEscalated() {
-					l(fmt.Sprintf("Workflow %s is ESCALATED", wf.XDW_Key), true)
+					log.Printf("Workflow %s is ESCALATED", wf.XDW_Key)
 					i.EscalteWorkflows.Workflows = append(i.EscalteWorkflows.Workflows, wf)
 					i.EscalteWorkflows.Count = i.EscalteWorkflows.Count + 1
 					i.Dashboard.Escalated = i.Dashboard.Escalated + 1
 				}
 			} else {
-				l(fmt.Sprintf("Workflow %s is CLOSED", wf.XDW_Key), true)
+				log.Printf("Workflow %s is CLOSED", wf.XDW_Key)
 				i.ClosedWorkflows.Workflows = append(i.ClosedWorkflows.Workflows, wf)
 				i.ClosedWorkflows.Count = i.ClosedWorkflows.Count + 1
 				i.Dashboard.Complete = i.Dashboard.Complete + 1
 			}
 
 			if i.setIsWorkflowOverdueState() {
-				l(fmt.Sprintf("Workflow %s Target is MISSED", wf.XDW_Key), true)
+				log.Printf("Workflow %s Target is MISSED", wf.XDW_Key)
 				i.OverdueWorkflows.Workflows = append(i.OverdueWorkflows.Workflows, wf)
 				i.OverdueWorkflows.Count = i.OverdueWorkflows.Count + 1
 				i.Dashboard.TargetMissed = i.Dashboard.TargetMissed + 1
 			} else {
 				if i.XDWDocument.WorkflowStatus == tukcnst.CLOSED {
-					l(fmt.Sprintf("Workflow %s Target is MET", wf.XDW_Key), true)
+					log.Printf("Workflow %s Target is MET", wf.XDW_Key)
 					i.TargetMetWorkflows.Workflows = append(i.TargetMetWorkflows.Workflows, wf)
 					i.TargetMetWorkflows.Count = i.TargetMetWorkflows.Count + 1
 					i.Dashboard.TargetMet = i.Dashboard.TargetMet + 1
@@ -1441,10 +1440,10 @@ func (i *Transaction) SetDashboardState() error {
 func (i *Transaction) IsWorkflowEscalated() bool {
 	if i.XDWDefinition.ExpirationTime != "" {
 		escalatedate := tukutil.OHT_FutureDate(tukutil.GetTimeFromString(i.XDWDocument.EffectiveTime.Value), i.XDWDefinition.ExpirationTime)
-		l(fmt.Sprintf("Workflow Start Time %s Worklow Escalate Time %s Workflow Escaleted = %v", i.XDWDocument.EffectiveTime.Value, escalatedate.String(), time.Now().After(escalatedate)), true)
+		log.Printf("Workflow Start Time %s Worklow Escalate Time %s Workflow Escaleted = %v", i.XDWDocument.EffectiveTime.Value, escalatedate.String(), time.Now().After(escalatedate))
 		return time.Now().After(escalatedate)
 	}
-	l("No Escalate time defined for Workflow", true)
+	log.Println("No Escalate time defined for Workflow")
 	return false
 }
 
@@ -1459,10 +1458,10 @@ func (i *Transaction) RegisterWorkflowDefinition(ismeta bool) error {
 		return errors.New("request bytes is not set")
 	}
 	if ismeta {
-		l("Persisting Workflow XDS Meta", true)
+		log.Println("Persisting Workflow XDS Meta")
 		err = i.registerWorkflowXDSMeta()
 	} else {
-		l("Registering Workflow Definition", true)
+		log.Println("Registering Workflow Definition")
 		err = i.registerWorkflowDef()
 	}
 	return err
@@ -1471,37 +1470,37 @@ func (i *Transaction) registerWorkflowDef() error {
 	var err error
 	err = json.Unmarshal(i.Request, &i.XDWDefinition)
 	if err != nil {
-		l(err.Error(), true)
+		log.Println(err.Error())
 		return err
 	}
 	event := tukdsub.DSUBEvent{Action: tukcnst.CANCEL, Pathway: i.XDWDefinition.Ref}
 	tukdsub.New_Transaction(&event)
-	l(fmt.Sprintf("Cleaned Event Service Subscriptions for Pathway %s", i.XDWDefinition.Ref), true)
+	log.Printf("Cleaned Event Service Subscriptions for Pathway %s", i.XDWDefinition.Ref)
 	pwyExpressions := make(map[string]string)
 	if err = i.PersistXDWDefinition(); err == nil {
-		l("Parsing XDW Tasks for potential DSUB Broker Subscriptions", true)
+		log.Println("Parsing XDW Tasks for potential DSUB Broker Subscriptions")
 		for _, task := range i.XDWDefinition.Tasks {
 			for _, inp := range task.Input {
-				l(fmt.Sprintf("Checking Input Task %s", inp.Name), true)
+				log.Printf("Checking Input Task %s", inp.Name)
 				if inp.AccessType == tukcnst.XDS_REGISTERED {
 					pwyExpressions[inp.Name] = i.XDWDefinition.Ref
-					l(fmt.Sprintf("Task %v %s task input %s included in potential DSUB Broker subscriptions", task.ID, task.Name, inp.Name), true)
+					log.Printf("Task %v %s task input %s included in potential DSUB Broker subscriptions", task.ID, task.Name, inp.Name)
 				} else {
-					l(fmt.Sprintf("Input Task %s does not require a dsub broker subscription", inp.Name), true)
+					log.Printf("Input Task %s does not require a dsub broker subscription", inp.Name)
 				}
 			}
 			for _, out := range task.Output {
-				l(fmt.Sprintf("Checking Output Task %s", out.Name), true)
+				log.Printf("Checking Output Task %s", out.Name)
 				if out.AccessType == tukcnst.XDS_REGISTERED {
 					pwyExpressions[out.Name] = i.XDWDefinition.Ref
-					l(fmt.Sprintf("Task %v %s task output %s included in potential DSUB Broker subscriptions", task.ID, task.Name, out.Name), true)
+					log.Printf("Task %v %s task output %s included in potential DSUB Broker subscriptions", task.ID, task.Name, out.Name)
 				} else {
-					l(fmt.Sprintf("Output Task %s does not require a dsub broker subscription", out.Name), true)
+					log.Printf("Output Task %s does not require a dsub broker subscription", out.Name)
 				}
 			}
 		}
 	}
-	l(fmt.Sprintf("Found %v potential DSUB Broker Subscriptions - %s", len(pwyExpressions), pwyExpressions), true)
+	log.Printf("Found %v potential DSUB Broker Subscriptions - %s", len(pwyExpressions), pwyExpressions)
 	if len(pwyExpressions) > 0 {
 		event.Action = tukcnst.CREATE
 		event.BrokerURL = i.DSUB_BrokerURL
@@ -1519,12 +1518,12 @@ func (i *Transaction) registerWorkflowXDSMeta() error {
 	xdws := tukdbint.XDWS{Action: tukcnst.DELETE}
 	xdws.XDW = append(xdws.XDW, xdw)
 	if err = tukdbint.NewDBEvent(&xdws); err == nil {
-		l(fmt.Sprintf("Deleted Existing XDS Meta for Pathway %s", i.Pathway), true)
+		log.Printf("Deleted Existing XDS Meta for Pathway %s", i.Pathway)
 		xdw = tukdbint.XDW{Name: i.Pathway + "_meta", IsXDSMeta: true, XDW: string(i.Request)}
 		xdws = tukdbint.XDWS{Action: tukcnst.INSERT}
 		xdws.XDW = append(xdws.XDW, xdw)
 		if err = tukdbint.NewDBEvent(&xdws); err == nil {
-			l(fmt.Sprintf("Persisted Workflow XDS Meta for Pathway %s", i.Pathway), true)
+			log.Printf("Persisted Workflow XDS Meta for Pathway %s", i.Pathway)
 		}
 	}
 	return err
@@ -1535,12 +1534,12 @@ func (i *Transaction) PersistXDWDefinition() error {
 	xdws := tukdbint.XDWS{Action: tukcnst.DELETE}
 	xdws.XDW = append(xdws.XDW, xdw)
 	if err = tukdbint.NewDBEvent(&xdws); err == nil {
-		l(fmt.Sprintf("Deleted Existing XDW Definition for Pathway %s", i.Pathway), true)
+		log.Printf("Deleted Existing XDW Definition for Pathway %s", i.Pathway)
 		xdw = tukdbint.XDW{Name: i.Pathway, IsXDSMeta: false, XDW: string(i.Request)}
 		xdws = tukdbint.XDWS{Action: tukcnst.INSERT}
 		xdws.XDW = append(xdws.XDW, xdw)
 		if err = tukdbint.NewDBEvent(&xdws); err == nil {
-			l(fmt.Sprintf("Persisted New XDW Definition for Pathway %s", i.Pathway), true)
+			log.Printf("Persisted New XDW Definition for Pathway %s", i.Pathway)
 		}
 	}
 	return err
@@ -1580,13 +1579,4 @@ func (e eventsList) Less(i, j int) bool {
 }
 func (e eventsList) Swap(i, j int) {
 	e[i], e[j] = e[j], e[i]
-}
-func l(msg string, debug bool) {
-	if !debug {
-		log.Println(msg)
-	} else {
-		if DebugMode {
-			log.Println(msg)
-		}
-	}
 }
