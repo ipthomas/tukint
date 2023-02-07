@@ -572,10 +572,15 @@ func (i *TukEvent) newXDWHandler() []byte {
 		}
 		log.Println("Unmarshalled Workflow Definition")
 	}
+	type apirsp struct {
+		XDW tukxdw.XDWWorkflowDocument
+		DEF tukxdw.WorkflowDefinition
+	}
+	a := apirsp{XDW: i.XDWWorkflowDocument, DEF: i.WorkflowDefinition}
 
 	if i.ReturnJSON {
 		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
-		b, e := json.MarshalIndent(i.XDWWorkflowDocument, "", "  ")
+		b, e := json.MarshalIndent(a, "", "  ")
 		if e != nil {
 			log.Println(e.Error())
 			return []byte(e.Error())
@@ -584,7 +589,7 @@ func (i *TukEvent) newXDWHandler() []byte {
 	}
 	if i.ReturnXML {
 		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
-		b, err := xml.MarshalIndent(i.XDWWorkflowDocument, "", "  ")
+		b, err := xml.MarshalIndent(a, "", "  ")
 		if err != nil {
 			log.Println(err.Error())
 			return []byte(err.Error())
@@ -634,7 +639,6 @@ func (i *TukEvent) newXDWSHandler() []byte {
 		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
 		b, e := json.MarshalIndent(i.XDWDocuments, "", "  ")
 		if e != nil {
-			log.Println(e.Error())
 			log.Println(e.Error())
 			return []byte(e.Error())
 		}
@@ -990,8 +994,9 @@ func TukEventServer() {
 }
 func startUpMessage() {
 	log.Println("Starting " + Services.EventService.Desc)
-	log.Println("Listening for DSUB Notifications on " + Services.EventService.WSE)
-	log.Println("Testing Event Manager Home Page. " + Services.EventService.WSE + "?act=widget&task=spa&user=test&org=spirit&role=admin")
+	log.Println("Listening for DSUB Notifications on " + Services.EventService.WSE + "eventservice/event")
+	log.Println("Event Manager Swagger API. " + Services.EventService.WSE)
+	log.Println("Event Manager Admin GUI. " + Services.EventService.WSE + "eventservice/event?act=admin&user=test&org=spirit&role=admin")
 }
 func monitorApp() {
 	ch := make(chan os.Signal, 1)
