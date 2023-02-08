@@ -2,7 +2,6 @@ package tukint
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -1039,7 +1038,7 @@ func (i *TukEvent) setAwsResponseHeaders() map[string]string {
 	}
 	return awsHeaders
 }
-func Handle_AWS_API_GW_Request(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	i := TukEvent{REGOid: Regoid, EventServices: Services}
 	i.HTTPMethod = request.HTTPMethod
 	i.Body = request.Body
