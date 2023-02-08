@@ -678,10 +678,10 @@ func (i *TukEvent) manageEvents() []byte {
 	var rsp []byte
 	switch i.Task {
 	case tukcnst.CREATE:
-		return i.createUserEvent()
+		return i.createEvent()
 	case tukcnst.LIST:
 		evs := tukdbint.Events{Action: tukcnst.SELECT}
-		ev := tukdbint.Event{Pathway: i.Pathway, NhsId: i.NHSId, Version: i.Vers, TaskId: i.TaskID}
+		ev := tukdbint.Event{Id: i.RowId, Pathway: i.Pathway, NhsId: i.NHSId, Version: i.Vers, TaskId: i.TaskID}
 		evs.Events = append(evs.Events, ev)
 		tukdbint.NewDBEvent(&evs)
 		i.DBEvents = evs.Events
@@ -693,7 +693,7 @@ func (i *TukEvent) manageEvents() []byte {
 	}
 	return rsp
 }
-func (i *TukEvent) createUserEvent() []byte {
+func (i *TukEvent) createEvent() []byte {
 	i.DBEvent = tukdbint.Event{}
 	i.DBEvent.User = i.EventServices.EventService.User
 	i.DBEvent.Org = i.EventServices.EventService.Org
