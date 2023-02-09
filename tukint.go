@@ -641,7 +641,9 @@ func (i *TukEvent) newXDWSHandler() []byte {
 		}
 	}
 	if i.ReturnJSON {
-		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		if i.HttpResponse != nil {
+			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		}
 		b, e := json.MarshalIndent(i.XDWDocuments, "", "  ")
 		if e != nil {
 			log.Println(e.Error())
@@ -650,7 +652,9 @@ func (i *TukEvent) newXDWSHandler() []byte {
 		return b
 	}
 	if i.ReturnXML {
-		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		if i.HttpResponse != nil {
+			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		}
 		b, err := xml.MarshalIndent(i.XDWDocuments, "", "  ")
 		if err != nil {
 			log.Println(err.Error())
@@ -669,8 +673,9 @@ func (i *TukEvent) manageSubscriptions() []byte {
 	tukdsub.New_Transaction(&subs)
 	i.DBSubscriptions = subs.Subs
 	if i.ReturnJSON {
-		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.APPLICATION_JSON)
-		i.ReturnJSON = true
+		if i.HttpResponse != nil {
+			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.APPLICATION_JSON)
+		}
 		jstr, err := json.Marshal(i.DBSubscriptions)
 		if err != nil {
 			return []byte(err.Error())
