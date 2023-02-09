@@ -724,12 +724,12 @@ func (i *TukEvent) createEvent() []byte {
 	return i.handleRequest()
 }
 func (i *TukEvent) handleRequest() []byte {
-	if i.HTTPMethod == http.MethodPost {
+	if i.Body == "" && i.HTTPMethod == http.MethodPost {
 		log.Printf("Processing POST Request from %s", i.HttpRequest.RemoteAddr)
 		defer i.HttpRequest.Body.Close()
 		return i.parsePostEvent()
 	}
-	log.Printf("Processing GET %s %s Request from %s", i.Act, i.Task, i.HttpRequest.RemoteAddr)
+	log.Printf("Processing GET %s %s Request from %s", i.Act, i.Task, i.EventServices.EventService.User)
 	var rsp = []byte("ALIVE")
 	switch i.Act {
 	case tukcnst.XDW_ACTOR_CONTENT_CONSUMER:
