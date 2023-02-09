@@ -1142,7 +1142,7 @@ func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.A
 	if i.ReturnXML {
 		awsHeaders[tukcnst.CONTENT_TYPE] = tukcnst.APPLICATION_XML
 	}
-	return events.APIGatewayProxyResponse{
+	return &events.APIGatewayProxyResponse{
 		StatusCode: i.ReturnCode,
 		Headers:    i.setAwsResponseHeaders(),
 		Body:       string(tukrsp),
