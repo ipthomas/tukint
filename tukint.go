@@ -580,7 +580,9 @@ func (i *TukEvent) newXDWHandler() []byte {
 	a := apirsp{XDW: i.XDWWorkflowDocument, DEF: i.WorkflowDefinition}
 
 	if i.ReturnJSON {
-		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		if i.HttpResponse != nil {
+			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		}
 		b, e := json.MarshalIndent(a, "", "  ")
 		if e != nil {
 			log.Println(e.Error())
@@ -589,7 +591,9 @@ func (i *TukEvent) newXDWHandler() []byte {
 		return b
 	}
 	if i.ReturnXML {
-		i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		if i.HttpResponse != nil {
+			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+		}
 		b, err := xml.MarshalIndent(a, "", "  ")
 		if err != nil {
 			log.Println(err.Error())
