@@ -193,8 +193,9 @@ func init() {
 	}
 	log.Printf("Set Config file = %s", configFile)
 }
-func InitTuki() {
+func InitTuki() error {
 	var err error
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	lenabled, _ := strconv.ParseBool(os.Getenv("Log_Enabled"))
 	if lenabled {
 		LogFile = tukutil.CreateLog(tukcnst.DEFAULT_TUK_SERVICE_LOG_FOLDER)
@@ -206,7 +207,7 @@ func InitTuki() {
 		log.Println(err.Error())
 		tukdbint.DBConn.Close()
 		LogFile.Close()
-		os.Exit(1)
+		return err
 	}
 	Regoid = os.Getenv(tukcnst.ENV_REG_OID)
 	if Regoid == "" {
@@ -221,6 +222,7 @@ func InitTuki() {
 	} else {
 		log.Printf("Set Regional OID %s from Environment Var %s", Regoid, tukcnst.ENV_REG_OID)
 	}
+	return nil
 }
 
 func SetEventServiceState() error {
