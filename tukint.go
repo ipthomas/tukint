@@ -903,7 +903,8 @@ func (i *TukEvent) manageServices() []byte {
 }
 func (i *TukEvent) queryPatient() []byte {
 	if err := i.setPatientInfo(); err != nil {
-		return []byte(err.Error())
+		log.Println(err.Error())
+		return []byte("Patient Service is currently unavailable. Please try later")
 	}
 	return i.PatientWidget()
 }
