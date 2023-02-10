@@ -741,6 +741,8 @@ func (i *TukEvent) handleRequest() []byte {
 	log.Printf("Processing GET %s %s Request from %s", i.Act, i.Task, i.EventServices.EventService.User)
 	var rsp = []byte("ALIVE")
 	switch i.Act {
+	case tukcnst.PATIENT:
+		rsp = i.queryPatient()
 	case tukcnst.XDW_ACTOR_CONTENT_CONSUMER:
 		rsp = i.xdwContentConsumer()
 	case tukcnst.XDW_ACTOR_CONTENT_CREATOR:
@@ -899,6 +901,12 @@ func (i *TukEvent) manageServices() []byte {
 	}
 	return nil
 }
+func (i *TukEvent) queryPatient() []byte {
+	if err := i.setPatientInfo(); err != nil {
+		return []byte(err.Error())
+	}
+	return i.PatientWidget()
+}
 func (i *TukEvent) setPatientInfo() error {
 	var url = ""
 	cache := false
@@ -928,14 +936,19 @@ func (i *TukEvent) setPatientInfo() error {
 				log.Println(err.Error())
 				return err
 			}
+			i.FamilyName = pdq.FamilyName
+			i.GivenName = pdq.GivenName
+			i.DOB = pdq.BirthDate
+			i.ZIP = pdq.Zip
+			i.Gender = pdq.Gender
 		case tukcnst.PDQ_SERVER_TYPE_IHE_PDQV3:
 			if err := xml.Unmarshal(pdq.Response, &i.PDQv3Response); err != nil {
 				log.Println(err.Error())
 				return err
 			}
 		}
+		i.REGOid = os.Getenv(tukcnst.ENV_REG_OID)
 		i.NHSId = pdq.NHS_ID
-		log.Println("Obtained NHS ID " + i.NHSId)
 		i.REGId = pdq.REG_ID
 		i.PID = pdq.MRN_ID
 		i.PIDOid = pdq.MRN_OID
@@ -1223,7 +1236,7 @@ func (i *TukEvent) GetWidget() []byte {
 	case tukcnst.DASHBOARD:
 		return i.DashboardWidget()
 	case tukcnst.PATIENT:
-		return i.PatientWidget()
+		return i.PatientXDWs()
 	case tukcnst.TIMELINE:
 		return i.TimelineWidget()
 	case tukcnst.XDW:
@@ -1235,10 +1248,19 @@ func (i *TukEvent) GetWidget() []byte {
 	}
 	return []byte("invalid widget request")
 }
-func (i *TukEvent) PatientWidget() []byte {
+func (i *TukEvent) PatientXDWs() []byte {
 	i.setPatientInfo()
 	i.Task = tukcnst.XDWS
 	return i.handleRequest()
+}
+func (i *TukEvent) PatientWidget() []byte {
+	var b bytes.Buffer
+	err := i.EventServices.HTMLTemplates.ExecuteTemplate(&b, "pixmpatient", i)
+	if err != nil {
+		log.Println(err.Error())
+		return []byte(err.Error())
+	}
+	return b.Bytes()
 }
 func (i *TukEvent) XDWDocumentWidget() []byte {
 	var b bytes.Buffer
