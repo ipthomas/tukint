@@ -227,10 +227,10 @@ func InitTuki() error {
 func InitTempFiles() error {
 	statics := tukdbint.Statics{Action: tukcnst.SELECT}
 	tukdbint.NewDBEvent(&statics)
-	log.Printf("Loading %v static files to temp folder", statics.Count)
+	log.Printf("Loading %v static files to %s folder", statics.Count, os.TempDir())
 	for k, static := range statics.Static {
 		if k != 0 {
-			err := tukutil.WriteFileToTempFolder(static.Content, static.Name)
+			err := tukutil.WriteFileToTempFolder(static.Content, os.TempDir()+"/"+static.Name)
 			if err != nil {
 				log.Println(err.Error())
 			}
