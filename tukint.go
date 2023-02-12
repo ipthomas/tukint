@@ -224,7 +224,20 @@ func InitTuki() error {
 	}
 	return nil
 }
-
+func InitTempFiles() error {
+	statics := tukdbint.Statics{Action: tukcnst.SELECT}
+	tukdbint.NewDBEvent(&statics)
+	log.Printf("Loading %v static files to temp folder", statics.Count)
+	for k, static := range statics.Static {
+		if k != 0 {
+			err := tukutil.WriteFileToTempFolder(static.Content, static.Name)
+			if err != nil {
+				log.Println(err.Error())
+			}
+		}
+	}
+	return nil
+}
 func SetEventServiceState() error {
 	log.Println("Initialising Service States")
 	Services.ServiceConfigs = nil
