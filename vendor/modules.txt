@@ -7,10 +7,10 @@ github.com/go-sql-driver/mysql
 # github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
-# github.com/ipthomas/tukcnst v1.3.4
+# github.com/ipthomas/tukcnst v1.3.6
 ## explicit; go 1.19
 github.com/ipthomas/tukcnst
-# github.com/ipthomas/tukdbint v1.3.17
+# github.com/ipthomas/tukdbint v1.3.18
 ## explicit; go 1.19
 github.com/ipthomas/tukdbint
 # github.com/ipthomas/tukdsub v1.3.14
