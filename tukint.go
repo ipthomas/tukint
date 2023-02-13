@@ -770,6 +770,13 @@ func (i *TukEvent) handleRequest() []byte {
 		rsp = i.GetWidget()
 	case tukcnst.ADMIN:
 		rsp = i.AdminSpaWidget()
+	default:
+		if i.DocRef != "" {
+			filebytes, err := tukutil.GetFileBytes(os.TempDir() + "/" + i.DocRef)
+			if err == nil {
+				return filebytes
+			}
+		}
 	}
 	return rsp
 }
