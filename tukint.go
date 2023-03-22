@@ -1120,7 +1120,7 @@ func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.A
 	i.Body = request.Body
 	i.Audience = "N"
 	i.ReturnCode = 200
-	log.Printf("Processing request data for request %s.\n", request.RequestContext.RequestID)
+	log.Printf("Processing request data for request %s.\n", request.Path)
 	log.Printf("Body size = %d.\n", len(request.Body))
 	log.Println("Headers:")
 	for key, value := range request.Headers {
