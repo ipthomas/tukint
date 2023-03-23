@@ -2,7 +2,6 @@ package tukint
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -1039,7 +1038,7 @@ func TukEventServer() {
 }
 func startUpMessage() {
 	log.Println("Starting " + Services.EventService.Desc)
-	log.Println("Listening for DSUB Notifications on " + Services.EventService.WSE + "eventservice/event")
+	log.Println("Listening for Notifications on " + Services.EventService.WSE + "eventservice/event")
 	log.Println("Event Manager Swagger API. " + Services.EventService.WSE)
 	log.Println("Event Manager Admin GUI. " + Services.EventService.WSE + "eventservice/event?act=admin&user=test&org=spirit&role=admin")
 }
@@ -1084,35 +1083,16 @@ func (i *TukEvent) setAwsResponseHeaders() map[string]string {
 	}
 	return awsHeaders
 }
-func shouldB64Encode(file string, data []byte) (bool, []byte) {
-	exts := [...]string{"png", "ico", "jpeg"}
-	for _, ext := range exts {
-		if strings.HasSuffix(file, "."+ext) {
-			encodedData := base64.StdEncoding.EncodeToString(data)
-			return true, []byte(encodedData)
-		}
-	}
-	return false, data
-}
+
 func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	if strings.HasPrefix(request.Path, "/tmp/") {
 		i := TukEvent{}
 		if filebyte, err := tukutil.GetFileBytes(request.Path); err == nil {
-			shouldencode, b64file := shouldB64Encode(request.Path, filebyte)
-			if shouldencode {
-				return &events.APIGatewayProxyResponse{
-					StatusCode:      http.StatusOK,
-					Headers:         i.setAwsResponseHeaders(),
-					Body:            string(b64file),
-					IsBase64Encoded: true,
-				}, nil
-			} else {
-				return &events.APIGatewayProxyResponse{
-					StatusCode: http.StatusOK,
-					Headers:    i.setAwsResponseHeaders(),
-					Body:       string(filebyte),
-				}, nil
-			}
+			return &events.APIGatewayProxyResponse{
+				StatusCode: http.StatusOK,
+				Headers:    i.setAwsResponseHeaders(),
+				Body:       string(filebyte),
+			}, nil
 		}
 	}
 	i := TukEvent{REGOid: Regoid, EventServices: Services}
