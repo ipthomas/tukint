@@ -1,5 +1,7 @@
 github.com/aws/aws-lambda-go v1.37.0 h1:WXkQ/xhIcXZZ2P5ZBEw+bbAKeCEcb5NtiYpSwVVzIXg=
 github.com/aws/aws-lambda-go v1.37.0/go.mod h1:jwFe2KmMsHmffA1X2R09hH6lFzJQxzI8qK17ewzbQMM=
+github.com/aws/aws-lambda-go v1.39.1 h1:UcuX9O3JqhQyP/rxPJEpTUUSehzqkNpwKKRFa9N+ozk=
+github.com/aws/aws-lambda-go v1.39.1/go.mod h1:jwFe2KmMsHmffA1X2R09hH6lFzJQxzI8qK17ewzbQMM=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/go-sql-driver/mysql v1.7.0 h1:ueSltNNllEqE3qcWBTD0iQd3IpL/6U+mJxLkazJ7YPc=
 github.com/go-sql-driver/mysql v1.7.0/go.mod h1:OXbVy3sEdcQ2Doequ6Z5BW6fXNQTmx+9S1MCJN5yJMI=
@@ -19,6 +21,8 @@ github.com/ipthomas/tukdsub v1.3.12 h1:cXrhPtqJGJ1/8gfln2bKMivjNnBMqgzVhH9kqwlhV
 github.com/ipthomas/tukdsub v1.3.12/go.mod h1:is8kVZKv+oYHqICVRvOvrp3LPgEUFtzdjK8yx8H8rrU=
 github.com/ipthomas/tukdsub v1.3.14 h1:c2tSI95KXE++dl0jvFivvYv2s/AN7VZR++lSABGxz30=
 github.com/ipthomas/tukdsub v1.3.14/go.mod h1:AhgX1Ee8nvxSKGKTkefZQFLl4hKoL2WLq8bihBljfpI=
+github.com/ipthomas/tukdsub v1.3.17 h1:mPSACQlUS5gP8tEYXkw8WvCtL1AHkmLsojtTC/DB3VU=
+github.com/ipthomas/tukdsub v1.3.17/go.mod h1:AhgX1Ee8nvxSKGKTkefZQFLl4hKoL2WLq8bihBljfpI=
 github.com/ipthomas/tukhttp v1.3.7 h1:T+I/p/8g2ghgrEMKVwbKtXHTMwbX2gqrRAYDqUDLqtw=
 github.com/ipthomas/tukhttp v1.3.7/go.mod h1:gP96rMw5787E5yk5hfKMRamxbQPuNidM0fCBZ/1//qo=
 github.com/ipthomas/tukhttp v1.3.8 h1:c0vlB/Dfmeun+vW5KH6jwLgLsbuq0Wz34uvbcJ1qPwI=
@@ -35,6 +39,8 @@ github.com/ipthomas/tukxdw v1.3.10 h1:FskNsrj2TrZvkoc30sPSey64FxWVJ1h6CCiF2yfhxQ
 github.com/ipthomas/tukxdw v1.3.10/go.mod h1:ONeR+qRu3hxkbnXF4MR7WHJtTRt7W4sNjZyknl6K/ow=
 github.com/ipthomas/tukxdw v1.3.11 h1:/XYjzU3HBmWbisSQtwQH06kcNW4MbCLXOzDqbIsl3xU=
 github.com/ipthomas/tukxdw v1.3.11/go.mod h1:PhOVqEGAWfvM4ZfriZv+x8UHdaDugMJykwcaO+NJJEs=
+github.com/ipthomas/tukxdw v1.3.13 h1:AQzVyX9IIAAXgxj+81SRoT9H6P7V/4PJ3hm+9OxFdhs=
+github.com/ipthomas/tukxdw v1.3.13/go.mod h1:IL2fYMrpeRoGYr1e27pX9Dsb6rZg/ayzDVa7p7qnFRY=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/stretchr/testify v1.7.2 h1:4jaiDzPyXQvSd7D0EjG45355tLlV3VOECpq10pLC+8s=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=

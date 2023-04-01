@@ -127,15 +127,15 @@ type WorkflowDefinition struct {
 		Name            string `json:"name"`
 		Description     string `json:"description"`
 		ActualOwner     string `json:"actualowner"`
-		ExpirationTime  string `json:"expirationtime"`
-		StartByTime     string `json:"startbytime"`
+		ExpirationTime  string `json:"expirationtime,omitempty"`
+		StartByTime     string `json:"startbytime,omitempty"`
 		CompleteByTime  string `json:"completebytime"`
-		IsSkipable      bool   `json:"isskipable"`
+		IsSkipable      bool   `json:"isskipable,omitempty"`
 		PotentialOwners []struct {
 			OrganizationalEntity struct {
 				User string `json:"user"`
 			} `json:"organizationalEntity"`
-		} `json:"potentialOwners"`
+		} `json:"potentialOwners,omitempty"`
 		CompletionBehavior []struct {
 			Completion struct {
 				Condition string `json:"condition"`
@@ -1475,27 +1475,27 @@ func (i *Transaction) registerWorkflowDef() error {
 	}
 	event := tukdsub.DSUBEvent{Action: tukcnst.CANCEL, Pathway: i.XDWDefinition.Ref}
 	tukdsub.New_Transaction(&event)
-	log.Printf("Cleaned Event Service Subscriptions for Pathway %s", i.XDWDefinition.Ref)
+	log.Printf("Cancelled any existing DSUB Broker and Event Service Subscriptions for Pathway %s", i.XDWDefinition.Ref)
 	pwyExpressions := make(map[string]string)
 	if err = i.PersistXDWDefinition(); err == nil {
 		log.Println("Parsing XDW Tasks for potential DSUB Broker Subscriptions")
 		for _, task := range i.XDWDefinition.Tasks {
 			for _, inp := range task.Input {
-				log.Printf("Checking Input Task %s", inp.Name)
+				log.Printf("Checking Task %v %s input %s", task.ID, task.Name, inp.Name)
 				if inp.AccessType == tukcnst.XDS_REGISTERED {
 					pwyExpressions[inp.Name] = i.XDWDefinition.Ref
-					log.Printf("Task %v %s task input %s included in potential DSUB Broker subscriptions", task.ID, task.Name, inp.Name)
+					log.Printf("Task %v %s input %s included in potential DSUB Broker subscriptions", task.ID, task.Name, inp.Name)
 				} else {
-					log.Printf("Input Task %s does not require a dsub broker subscription", inp.Name)
+					log.Printf("Task %v %s input %s does not require a DSUB Broker subscription", task.ID, task.Name, inp.Name)
 				}
 			}
 			for _, out := range task.Output {
-				log.Printf("Checking Output Task %s", out.Name)
+				log.Printf("Checking Task %v %s output %s", task.ID, task.Name, out.Name)
 				if out.AccessType == tukcnst.XDS_REGISTERED {
 					pwyExpressions[out.Name] = i.XDWDefinition.Ref
-					log.Printf("Task %v %s task output %s included in potential DSUB Broker subscriptions", task.ID, task.Name, out.Name)
+					log.Printf("Task %v %s output %s included in potential DSUB Broker subscriptions", task.ID, task.Name, out.Name)
 				} else {
-					log.Printf("Output Task %s does not require a dsub broker subscription", out.Name)
+					log.Printf("Task %v %s output %s does not require a DSUB Broker subscription", task.ID, task.Name, out.Name)
 				}
 			}
 		}
@@ -1534,7 +1534,6 @@ func (i *Transaction) PersistXDWDefinition() error {
 	xdws := tukdbint.XDWS{Action: tukcnst.DELETE}
 	xdws.XDW = append(xdws.XDW, xdw)
 	if err = tukdbint.NewDBEvent(&xdws); err == nil {
-		log.Printf("Deleted Existing XDW Definition for Pathway %s", i.Pathway)
 		xdw = tukdbint.XDW{Name: i.Pathway, IsXDSMeta: false, XDW: string(i.Request)}
 		xdws = tukdbint.XDWS{Action: tukcnst.INSERT}
 		xdws.XDW = append(xdws.XDW, xdw)
