@@ -1063,6 +1063,13 @@ func monitorApp() {
 		os.Exit(1)
 	}()
 }
+func (i *TukEvent) getStaticFile() []byte {
+	if rsp, err := tukutil.GetFileBytes("/tmp/" + i.Act); err != nil {
+		return rsp
+	} else {
+		return []byte(err.Error())
+	}
+}
 func (i *TukEvent) setAwsResponseHeaders() map[string]string {
 	awsHeaders := make(map[string]string)
 	awsHeaders["Server"] = "Tiani_Spirit_UK"
@@ -1085,16 +1092,6 @@ func (i *TukEvent) setAwsResponseHeaders() map[string]string {
 }
 
 func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
-	if strings.HasPrefix(request.Path, "/tmp/") {
-		i := TukEvent{}
-		if filebyte, err := tukutil.GetFileBytes(request.Path); err == nil {
-			return &events.APIGatewayProxyResponse{
-				StatusCode: http.StatusOK,
-				Headers:    i.setAwsResponseHeaders(),
-				Body:       string(filebyte),
-			}, nil
-		}
-	}
 	i := TukEvent{REGOid: Regoid, EventServices: Services}
 	i.HTTPMethod = request.HTTPMethod
 	i.Body = request.Body
@@ -1122,10 +1119,24 @@ func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.A
 			}
 		}
 	}
+	if strings.HasPrefix(request.Path, "/tmp/") {
+		i := TukEvent{}
+		if filebyte, err := tukutil.GetFileBytes(request.Path); err == nil {
+			return &events.APIGatewayProxyResponse{
+				StatusCode: http.StatusOK,
+				Headers:    i.setAwsResponseHeaders(),
+				Body:       string(filebyte),
+			}, nil
+		}
+	}
 	log.Println("AWS API Query Parameters")
+	isStaticFileRequest := false
 	for key, value := range request.QueryStringParameters {
 		log.Printf("    %s: %s\n", key, value)
 		switch key {
+		case tukcnst.STATICS:
+			isStaticFileRequest = true
+			i.Act = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_SAML:
 			i.SAML = value
 		case tukcnst.TUK_EVENT_QUERY_PARAM_ACT:
@@ -1188,14 +1199,14 @@ func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.A
 			}
 		}
 	}
+	if isStaticFileRequest {
+		return &events.APIGatewayProxyResponse{
+			StatusCode: 200,
+			Headers:    i.setAwsResponseHeaders(),
+			Body:       string(i.getStaticFile()),
+		}, nil
+	}
 	tukrsp := i.handleRequest()
-	awsHeaders := make(map[string]string)
-	if i.ReturnJSON {
-		awsHeaders[tukcnst.CONTENT_TYPE] = tukcnst.APPLICATION_JSON
-	}
-	if i.ReturnXML {
-		awsHeaders[tukcnst.CONTENT_TYPE] = tukcnst.APPLICATION_XML
-	}
 	return &events.APIGatewayProxyResponse{
 		StatusCode: i.ReturnCode,
 		Headers:    i.setAwsResponseHeaders(),
