@@ -1064,11 +1064,19 @@ func monitorApp() {
 	}()
 }
 func (i *TukEvent) getStaticFile() []byte {
-	if rsp, err := tukutil.GetFileBytes("/tmp/" + i.Act); err != nil {
-		return rsp
-	} else {
+	file := tukdbint.Static{Name: i.Act}
+	statics := tukdbint.Statics{Action: tukcnst.SELECT}
+	statics.Static = append(statics.Static, file)
+
+	if err := tukdbint.NewDBEvent(&statics); err != nil {
 		return []byte(err.Error())
 	}
+
+	if statics.Count == 1 {
+		return statics.Static[1].Content
+	}
+
+	return []byte("")
 }
 func (i *TukEvent) setAwsResponseHeaders() map[string]string {
 	awsHeaders := make(map[string]string)
@@ -1119,16 +1127,7 @@ func Handle_AWS_API_GW_Request(request events.APIGatewayProxyRequest) (*events.A
 			}
 		}
 	}
-	if strings.HasPrefix(request.Path, "/tmp/") {
-		i := TukEvent{}
-		if filebyte, err := tukutil.GetFileBytes(request.Path); err == nil {
-			return &events.APIGatewayProxyResponse{
-				StatusCode: http.StatusOK,
-				Headers:    i.setAwsResponseHeaders(),
-				Body:       string(filebyte),
-			}, nil
-		}
-	}
+
 	log.Println("AWS API Query Parameters")
 	isStaticFileRequest := false
 	for key, value := range request.QueryStringParameters {
