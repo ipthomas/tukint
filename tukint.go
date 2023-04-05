@@ -2,6 +2,7 @@ package tukint
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -1073,7 +1074,12 @@ func (i *TukEvent) getStaticFile() []byte {
 	}
 
 	if statics.Count == 1 {
-		return statics.Static[1].Content
+		log.Printf("Found static file %s", i.Act)
+		var rsp []byte
+		if pos, err := base64.StdEncoding.Decode(rsp, statics.Static[1].Content); err == nil {
+			log.Printf("Decoded %v bytes", pos)
+			return rsp
+		}
 	}
 
 	return []byte("")
