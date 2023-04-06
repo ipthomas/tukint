@@ -1075,10 +1075,9 @@ func (i *TukEvent) getStaticFile() []byte {
 
 	if statics.Count == 1 {
 		log.Printf("Found static file %s", i.Act)
-		var rsp []byte
-		if pos, err := base64.StdEncoding.Decode(rsp, []byte(statics.Static[1].Content)); err == nil {
-			log.Printf("Decoded %v bytes", pos)
-			return rsp
+		decodedBytes, err := base64.URLEncoding.DecodeString(statics.Static[1].Content)
+		if err == nil {
+			return decodedBytes
 		}
 	}
 
