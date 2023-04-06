@@ -231,7 +231,7 @@ func InitTempFiles() error {
 	log.Printf("Loading %v static files to %s folder", statics.Count, os.TempDir())
 	for k, static := range statics.Static {
 		if k != 0 {
-			err := tukutil.WriteFileToTempFolder(static.Content, os.TempDir()+"/"+static.Name)
+			err := tukutil.WriteFileToTempFolder([]byte(static.Content), os.TempDir()+"/"+static.Name)
 			if err != nil {
 				log.Println(err.Error())
 			}
@@ -1076,7 +1076,7 @@ func (i *TukEvent) getStaticFile() []byte {
 	if statics.Count == 1 {
 		log.Printf("Found static file %s", i.Act)
 		var rsp []byte
-		if pos, err := base64.StdEncoding.Decode(rsp, statics.Static[1].Content); err == nil {
+		if pos, err := base64.StdEncoding.Decode(rsp, []byte(statics.Static[1].Content)); err == nil {
 			log.Printf("Decoded %v bytes", pos)
 			return rsp
 		}
