@@ -923,7 +923,7 @@ func (i *Transaction) SetWorkflowDuration() {
 	log.Printf("Workflow Started %s", ws.String())
 	we := time.Now()
 	log.Printf("Time Now %s", we.String())
-	if i.XDWDocument.WorkflowStatus == tukcnst.COMPLETE {
+	if i.XDWDocument.WorkflowStatus == tukcnst.CLOSED {
 		we = i.XDWDocument.GetLatestWorkflowEventTime()
 		log.Printf("Workflow is Complete. Latest Event Time was %s", we.String())
 	}
