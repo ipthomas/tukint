@@ -513,12 +513,6 @@ func (i *TukEvent) ElapsedTime() string {
 	log.Printf("Elapsed time for workflow %s nhs id %s version %v is %s", i.XDWWorkflowDocument.WorkflowDefinitionReference, i.XDWWorkflowDocument.Patient.ID.Extension, i.Vers, elapsedTime)
 	return elapsedTime
 }
-func (i *TukEvent) LastUpdateTime() string {
-	return i.PrettyTime(i.XDWWorkflowDocument.GetLatestWorkflowEventTime().String())
-}
-func (i *TukEvent) lastUpdateTime() time.Time {
-	return i.XDWWorkflowDocument.GetLatestWorkflowEventTime()
-}
 func (i *TukEvent) TaskCompleteByTimeString(taskid string) string {
 	log.Printf("Obtaining Workflow Task %s Complete By date", taskid)
 	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition, Task_ID: tukutil.GetIntFromString(taskid)}
@@ -544,22 +538,6 @@ func (i *TukEvent) CompletionTime() string {
 	}
 	return i.PrettyTime(i.getWorkflowCompleteByDate().String())
 }
-func (i *TukEvent) IsWorkflowOverdue() bool {
-	if i.WorkflowDefinition.CompleteByTime == "" {
-		return false
-	}
-	completionDate := i.getWorkflowCompleteByDate()
-	if time.Now().Before(completionDate) {
-		return false
-	}
-	if i.XDWWorkflowDocument.WorkflowStatus == tukcnst.CLOSED {
-		lupdt := i.lastUpdateTime()
-		if lupdt.Before(completionDate) {
-			return false
-		}
-	}
-	return true
-}
 func (i *TukEvent) WorkflowTimeRemaining() string {
 	log.Printf("Obtaining time remaining for %s Workflow NHS ID %s", i.Pathway, i.NHSId)
 	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition}
@@ -574,14 +552,18 @@ func (i *TukEvent) parsePostEvent() []byte {
 	return i.HandleBrokerNotification()
 }
 func (i *TukEvent) newXDWHandler() []byte {
-	wfs := tukxdw.GetWorkflows(i.Pathway, i.NHSId, "", i.DocRef, i.Vers, false, i.Status)
-	if wfs.Count == 1 {
-		if err := xml.Unmarshal([]byte(wfs.Workflows[1].XDW_Doc), &i.XDWWorkflowDocument); err != nil {
+	trans := tukxdw.Transaction{Actor: tukcnst.XDW_ACTOR_CONTENT_CONSUMER, Pathway: i.Pathway, NHS_ID: i.NHSId, XDWVersion: i.Vers}
+	if err := tukxdw.Execute(&trans); err != nil {
+		log.Println(err.Error())
+		return nil
+	}
+	if trans.Workflows.Count == 1 {
+		if err := xml.Unmarshal([]byte(trans.Workflows.Workflows[1].XDW_Doc), &i.XDWWorkflowDocument); err != nil {
 			log.Println(err.Error())
 			return nil
 		}
 		log.Println("Unmarshalled Workflow Document")
-		if err := json.Unmarshal([]byte(wfs.Workflows[1].XDW_Def), &i.WorkflowDefinition); err != nil {
+		if err := json.Unmarshal([]byte(trans.Workflows.Workflows[1].XDW_Def), &i.WorkflowDefinition); err != nil {
 			log.Println(err.Error())
 			return nil
 		}
@@ -630,33 +612,22 @@ func (i *TukEvent) newXDWSHandler() []byte {
 	case tukcnst.TUK_STATUS_ESCALATED:
 		status = tukcnst.TUK_STATUS_OPEN
 	}
-	if status != "" {
-		log.Printf("Retrieving XDWS with Status %s", status)
+	trans := tukxdw.Transaction{Actor: tukcnst.XDW_ACTOR_CONTENT_CONSUMER, Pathway: i.Pathway, NHS_ID: i.NHSId, XDWVersion: i.Vers}
+
+	if err := tukxdw.Execute(&trans); err != nil {
+		log.Println(err.Error())
+		return nil
 	}
-	wfs := tukdbint.GetWorkflows(i.Pathway, i.NHSId, "", i.DocRef, i.Vers, false, status)
-	log.Printf("Total Workflow Count %v", wfs.Count)
-	trans := tukxdw.Transaction{Workflows: wfs}
-	trans.SetDashboardState()
-	retwfs := trans.Workflows
-	if i.Status == tukcnst.TUK_STATUS_MET {
-		retwfs = trans.TargetMetWorkflows
-	} else {
-		if i.Status == tukcnst.TUK_STATUS_MISSED {
-			retwfs = trans.OverdueWorkflows
-		} else {
-			if i.Status == tukcnst.TUK_STATUS_ESCALATED {
-				retwfs = trans.EscalteWorkflows
-			}
-		}
-	}
-	for _, v := range retwfs.Workflows {
+	log.Printf("Total Workflow Count %v", trans.Workflows.Count)
+
+	for _, v := range trans.Workflows.Workflows {
 		if v.Id > 0 {
 			i.XDWDocuments = append(i.XDWDocuments, v)
 		}
 	}
 	if i.ReturnJSON {
 		if i.HttpResponse != nil {
-			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.APPLICATION_JSON)
 		}
 		b, e := json.MarshalIndent(i.XDWDocuments, "", "  ")
 		if e != nil {
@@ -667,7 +638,7 @@ func (i *TukEvent) newXDWSHandler() []byte {
 	}
 	if i.ReturnXML {
 		if i.HttpResponse != nil {
-			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.TEXT_PLAIN)
+			i.HttpResponse.Header().Add(tukcnst.CONTENT_TYPE, tukcnst.APPLICATION_XML)
 		}
 		b, err := xml.MarshalIndent(i.XDWDocuments, "", "  ")
 		if err != nil {
@@ -739,7 +710,8 @@ func (i *TukEvent) createEvent() []byte {
 	} else {
 		log.Printf("Persisted User Generated Event id %v for task %v pathway %s nhs id %v version %v", evs.LastInsertId, i.DBEvent.TaskId, i.DBEvent.Pathway, i.DBEvent.NhsId, i.Vers)
 	}
-	if err := tukxdw.ContentUpdater(i.Pathway, i.Vers, i.NHSId, i.EventServices.EventService.User); err != nil {
+	trans := tukxdw.Transaction{Actor: tukcnst.XDW_ACTOR_CONTENT_UPDATER, Pathway: i.Pathway, XDWVersion: i.Vers, NHS_ID: i.NHSId}
+	if err := tukxdw.Execute(&trans); err != nil {
 		log.Println(err.Error())
 	}
 	i.Act = tukcnst.WIDGET
@@ -784,31 +756,14 @@ func (i *TukEvent) handleRequest() []byte {
 func (i *TukEvent) xdwContentConsumer() []byte {
 	i.ReturnXML = true
 	trans := tukxdw.Transaction{
-		Actor:              i.Act,
-		User:               i.EventServices.EventService.User,
-		Org:                i.EventServices.EventService.Org,
-		Role:               i.EventServices.EventService.Role,
-		Pathway:            i.Pathway,
-		NHS_ID:             i.NHSId,
-		Task_ID:            -1,
-		XDWVersion:         -1,
-		DSUB_BrokerURL:     os.Getenv(tukcnst.DSUB_BROKER_URL),
-		DSUB_ConsumerURL:   os.Getenv(tukcnst.ENV_DSUB_CONSUMER_URL),
-		Request:            []byte{},
-		Response:           []byte{},
-		Dashboard:          tukxdw.Dashboard{},
-		XDWDefinition:      tukxdw.WorkflowDefinition{},
-		XDSDocumentMeta:    tukxdw.XDSDocumentMeta{},
-		XDWDocument:        tukxdw.XDWWorkflowDocument{},
-		XDWState:           tukxdw.XDWState{},
-		Workflows:          tukdbint.Workflows{},
-		OpenWorkflows:      tukdbint.Workflows{},
-		OverdueWorkflows:   tukdbint.Workflows{},
-		EscalteWorkflows:   tukdbint.Workflows{},
-		ClosedWorkflows:    tukdbint.Workflows{},
-		TargetMetWorkflows: tukdbint.Workflows{},
-		XDWEvents:          tukdbint.Events{},
-		XDWTaskStates:      []tukxdw.XDWTaskState{},
+		Actor:      i.Act,
+		User:       i.EventServices.EventService.User,
+		Org:        i.EventServices.EventService.Org,
+		Role:       i.EventServices.EventService.Role,
+		Pathway:    i.Pathway,
+		NHS_ID:     i.NHSId,
+		Task_ID:    -1,
+		XDWVersion: i.Vers,
 	}
 	if err := tukxdw.Execute(&trans); err != nil {
 		log.Println(err.Error())
@@ -1340,26 +1295,14 @@ func (i *TukEvent) DashboardWidget() []byte {
 	case tukcnst.TUK_STATUS_ESCALATED:
 		i.Status = tukcnst.OPEN
 	}
-	trans := tukxdw.Transaction{Workflows: tukxdw.GetWorkflows(i.Pathway, i.NHSId, "", i.DocRef, i.Vers, false, "")}
-	trans.SetDashboardState()
-	if i.Status == tukcnst.TUK_STATUS_MET {
-		trans := tukxdw.Transaction{Workflows: trans.TargetMetWorkflows}
-		trans.SetDashboardState()
-	} else {
-		if i.Status == tukcnst.TUK_STATUS_MISSED {
-			trans := tukxdw.Transaction{Workflows: trans.OverdueWorkflows}
-			trans.SetDashboardState()
-		} else {
-			if i.Status == tukcnst.TUK_STATUS_ESCALATED {
-				trans := tukxdw.Transaction{Workflows: trans.EscalteWorkflows}
-				trans.SetDashboardState()
-			}
-		}
+	trans := tukxdw.Transaction{Pathway: i.Pathway, NHS_ID: i.NHSId, XDWVersion: i.Vers}
+	if err := tukxdw.Execute(&trans); err != nil {
+		log.Println(err.Error())
 	}
+
 	i.Dashboard = trans.Dashboard
-	var err error
 	var tplReturn bytes.Buffer
-	if err = i.EventServices.HTMLTemplates.ExecuteTemplate(&tplReturn, tukcnst.TUK_TEMPLATE_DASHBOARD_WIDGET, i); err != nil {
+	if err := i.EventServices.HTMLTemplates.ExecuteTemplate(&tplReturn, tukcnst.TUK_TEMPLATE_DASHBOARD_WIDGET, i); err != nil {
 		log.Println(err.Error())
 	}
 	return tplReturn.Bytes()

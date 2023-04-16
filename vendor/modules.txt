@@ -1,4 +1,4 @@
-# github.com/aws/aws-lambda-go v1.39.1
+# github.com/aws/aws-lambda-go v1.40.0
 ## explicit; go 1.18
 github.com/aws/aws-lambda-go/events
 # github.com/go-sql-driver/mysql v1.7.0
@@ -10,10 +10,10 @@ github.com/google/uuid
 # github.com/ipthomas/tukcnst v1.3.6
 ## explicit; go 1.19
 github.com/ipthomas/tukcnst
-# github.com/ipthomas/tukdbint v1.3.22
+# github.com/ipthomas/tukdbint v1.3.28
 ## explicit; go 1.19
 github.com/ipthomas/tukdbint
-# github.com/ipthomas/tukdsub v1.3.19
+# github.com/ipthomas/tukdsub v1.3.24
 ## explicit; go 1.19
 github.com/ipthomas/tukdsub
 # github.com/ipthomas/tukhttp v1.3.10
@@ -25,6 +25,6 @@ github.com/ipthomas/tukpdq
 # github.com/ipthomas/tukutil v1.3.10
 ## explicit; go 1.19
 github.com/ipthomas/tukutil
-# github.com/ipthomas/tukxdw v1.3.16
+# github.com/ipthomas/tukxdw v1.3.27
 ## explicit; go 1.19
 github.com/ipthomas/tukxdw
