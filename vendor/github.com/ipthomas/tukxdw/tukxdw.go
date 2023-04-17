@@ -518,85 +518,6 @@ func (i *Transaction) updateWorkflow() error {
 	}
 	return err
 }
-func (i *Transaction) SetXDWStates() error {
-	log.Println("Setting XDW States")
-	var err error
-	for _, wf := range i.Workflows.Workflows {
-		if len(wf.XDW_Doc) > 0 {
-			if err = xml.Unmarshal([]byte(wf.XDW_Doc), &i.XDWDocument); err != nil {
-				log.Println(err.Error())
-				return err
-			}
-			if err = json.Unmarshal([]byte(wf.XDW_Def), &i.XDWDefinition); err != nil {
-				log.Println(err.Error())
-				return err
-			}
-			log.Printf("Setting %s Workflow state for Patient %s", i.XDWDocument.WorkflowDefinitionReference, i.XDWDocument.Patient.ID.Extension)
-			state := tukdbint.Workflowstate{}
-			state.Created = wf.Created
-			state.Status = wf.Status
-			state.Published = wf.Published
-			state.WorkflowId = wf.Id
-			state.Pathway = wf.Pathway
-			state.NHSId = wf.NHSId
-			state.Version = wf.Version
-			state.CreatedBy = i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Family + " " + i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Prefix
-			state.CompleteBy = "Non Specified"
-			state.LastUpdate = i.GetLatestWorkflowEventTime().String()
-			state.Owner = ""
-			state.Overdue = "FALSE"
-			state.Escalated = "FALSE"
-			state.TargetMet = "TRUE"
-			state.InProgress = "TRUE"
-			state.Duration = i.GetWorkflowDuration()
-			state.TimeRemaining = i.GetWorkflowTimeRemaining()
-
-			workflowStartTime := tukutil.GetTimeFromString(state.Created)
-			if i.IsWorkflowOverdue() {
-				i.Dashboard.TargetMissed = i.Dashboard.TargetMissed + 1
-				state.Overdue = "TRUE"
-				state.TargetMet = "FALSE"
-			} else {
-				if i.XDWDocument.WorkflowStatus == tukcnst.CLOSED {
-					i.Dashboard.TargetMet = i.Dashboard.TargetMet + 1
-				}
-			}
-			if i.XDWDefinition.CompleteByTime == "" {
-				state.CompleteBy = "Non Specified"
-			} else {
-				period := strings.Split(i.XDWDefinition.CompleteByTime, "(")[0]
-				periodDuration := tukutil.GetIntFromString(strings.Split(strings.Split(i.XDWDefinition.CompleteByTime, "(")[1], ")")[0])
-				switch period {
-				case "month":
-					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, periodDuration, 0, 0, 0).String(), " +")[0]
-				case "day":
-					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, 0, periodDuration, 0, 0).String(), " +")[0]
-				case "hour":
-					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, 0, 0, periodDuration, 0).String(), " +")[0]
-				case "min":
-					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, 0, 0, 0, periodDuration).String(), " +")[0]
-				}
-			}
-
-			if i.XDWDocument.WorkflowStatus == tukcnst.OPEN {
-				log.Printf("Workflow %s is OPEN", wf.XDW_Key)
-				i.Dashboard.InProgress = i.Dashboard.InProgress + 1
-				if i.IsWorkflowEscalated() {
-					log.Printf("Workflow %s is ESCALATED", wf.XDW_Key)
-					i.Dashboard.Escalated = i.Dashboard.Escalated + 1
-					state.Escalated = "TRUE"
-				}
-			} else {
-				log.Printf("Workflow %s is CLOSED", wf.XDW_Key)
-				i.Dashboard.Complete = i.Dashboard.Complete + 1
-				state.InProgress = "FALSE"
-			}
-			i.XDWState.Workflowstate = append(i.XDWState.Workflowstate, state)
-		}
-	}
-
-	return err
-}
 
 // IHE XDW Content Creator
 func (i *Transaction) ContentCreator() error {
@@ -798,6 +719,85 @@ func (i *Transaction) ContentConsumer() error {
 		return err
 	}
 	return nil
+}
+func (i *Transaction) SetXDWStates() error {
+	log.Println("Setting XDW States")
+	var err error
+	for _, wf := range i.Workflows.Workflows {
+		if len(wf.XDW_Doc) > 0 {
+			if err = xml.Unmarshal([]byte(wf.XDW_Doc), &i.XDWDocument); err != nil {
+				log.Println(err.Error())
+				return err
+			}
+			if err = json.Unmarshal([]byte(wf.XDW_Def), &i.XDWDefinition); err != nil {
+				log.Println(err.Error())
+				return err
+			}
+			log.Printf("Setting %s Workflow state for Patient %s", i.XDWDocument.WorkflowDefinitionReference, i.XDWDocument.Patient.ID.Extension)
+			state := tukdbint.Workflowstate{}
+			state.Created = wf.Created
+			state.Status = wf.Status
+			state.Published = wf.Published
+			state.WorkflowId = wf.Id
+			state.Pathway = wf.Pathway
+			state.NHSId = wf.NHSId
+			state.Version = wf.Version
+			state.CreatedBy = i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Family + " " + i.XDWDocument.Author.AssignedAuthor.AssignedPerson.Name.Prefix
+			state.CompleteBy = "Non Specified"
+			state.LastUpdate = i.GetLatestWorkflowEventTime().String()
+			state.Owner = ""
+			state.Overdue = "FALSE"
+			state.Escalated = "FALSE"
+			state.TargetMet = "TRUE"
+			state.InProgress = "TRUE"
+			state.Duration = i.GetWorkflowDuration()
+			state.TimeRemaining = i.GetWorkflowTimeRemaining()
+
+			workflowStartTime := tukutil.GetTimeFromString(state.Created)
+			if i.IsWorkflowOverdue() {
+				i.Dashboard.TargetMissed = i.Dashboard.TargetMissed + 1
+				state.Overdue = "TRUE"
+				state.TargetMet = "FALSE"
+			} else {
+				if i.XDWDocument.WorkflowStatus == tukcnst.CLOSED {
+					i.Dashboard.TargetMet = i.Dashboard.TargetMet + 1
+				}
+			}
+			if i.XDWDefinition.CompleteByTime == "" {
+				state.CompleteBy = "Non Specified"
+			} else {
+				period := strings.Split(i.XDWDefinition.CompleteByTime, "(")[0]
+				periodDuration := tukutil.GetIntFromString(strings.Split(strings.Split(i.XDWDefinition.CompleteByTime, "(")[1], ")")[0])
+				switch period {
+				case "month":
+					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, periodDuration, 0, 0, 0).String(), " +")[0]
+				case "day":
+					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, 0, periodDuration, 0, 0).String(), " +")[0]
+				case "hour":
+					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, 0, 0, periodDuration, 0).String(), " +")[0]
+				case "min":
+					state.CompleteBy = strings.Split(tukutil.GetFutureDate(workflowStartTime, 0, 0, 0, 0, periodDuration).String(), " +")[0]
+				}
+			}
+
+			if i.XDWDocument.WorkflowStatus == tukcnst.OPEN {
+				log.Printf("Workflow %s is OPEN", wf.XDW_Key)
+				i.Dashboard.InProgress = i.Dashboard.InProgress + 1
+				if i.IsWorkflowEscalated() {
+					log.Printf("Workflow %s is ESCALATED", wf.XDW_Key)
+					i.Dashboard.Escalated = i.Dashboard.Escalated + 1
+					state.Escalated = "TRUE"
+				}
+			} else {
+				log.Printf("Workflow %s is CLOSED", wf.XDW_Key)
+				i.Dashboard.Complete = i.Dashboard.Complete + 1
+				state.InProgress = "FALSE"
+			}
+			i.XDWState.Workflowstate = append(i.XDWState.Workflowstate, state)
+		}
+	}
+
+	return err
 }
 
 func GetActiveWorkflowNames() []string {
