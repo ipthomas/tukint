@@ -284,6 +284,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"splitfhiroid":     tukutil.SplitFhirOid,
 		"splitexpression":  tukutil.SplitExpression,
 		"geticon":          tukutil.GetGlypicon,
+		"mappedid":         tukdbint.GetIDMapsMappedId,
 	}
 }
 func (i *EventServices) SetEventServicesStates() error {
