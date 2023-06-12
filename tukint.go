@@ -146,7 +146,6 @@ type TukEvent struct {
 	DBSubscriptions     tukdbint.Subscriptions
 	DBEvents            []tukdbint.Event
 	DBEvent             tukdbint.Event
-	DBEventAcks         tukdbint.EventAcks
 	PDQv3Response       tukpdq.PDQv3Response
 	PatientXMLStr       string
 	PIXmResponse        tukpdq.PIXmResponse
@@ -158,7 +157,7 @@ type TukEvent struct {
 	RepositoryUniqueId  string
 	Base64EncodedFile   string
 	EventServices       EventServices
-	XDWWorkflowDocument tukxdw.XDWWorkflowDocument
+	XDWWorkflowDocument tukxdw.WorkflowDocument
 	XDSDocumentMeta     tukxdw.XDSDocumentMeta
 	WorkflowDefinition  tukxdw.WorkflowDefinition
 	ConfigStr           string
@@ -201,9 +200,7 @@ func InitTuki() error {
 	if lenabled {
 		LogFile = tukutil.CreateLog(tukcnst.DEFAULT_TUK_SERVICE_LOG_FOLDER)
 	}
-	if err = SetEventServiceState(); err == nil {
-		err = cacheTemplates()
-	}
+
 	if err != nil {
 		log.Println(err.Error())
 		tukdbint.DBConn.Close()
@@ -213,7 +210,7 @@ func InitTuki() error {
 	Regoid = os.Getenv(tukcnst.ENV_REG_OID)
 	if Regoid == "" {
 		log.Printf("No Regional OID set in Environment Var %s. Checking for Event Service IDMapping", tukcnst.ENV_REG_OID)
-		Regoid = tukdbint.GetIDMapsLocalId(tukcnst.XDSDOMAIN)
+		Regoid = tukdbint.GetIDMapsLocalId("system", tukcnst.XDSDOMAIN)
 		log.Printf("IDMap Query returned %s", Regoid)
 		if Regoid != tukcnst.XDSDOMAIN {
 			log.Printf("Set Regional OID %s from Event Service Code System", Regoid)
@@ -239,18 +236,7 @@ func InitTempFiles() error {
 	}
 	return nil
 }
-func SetEventServiceState() error {
-	log.Println("Initialising Service States")
-	Services.ServiceConfigs = nil
-	err := Services.SetEventServicesStates()
-	hn, _ := os.Hostname()
-	if hn != Services.EventService.Host {
-		log.Printf("Warning: Configured Event Service Host Name %s is different to the OS Host Name %s. To be on safe side set the eventsrvc.json host value to equal the actual host name!", Services.EventService.Host, hn)
-	} else {
-		log.Printf("Configured Event Service Host Name %s is equal to the OS Host Name %s. So thats all good then!", Services.EventService.Host, hn)
-	}
-	return err
-}
+
 func cacheTemplates() error {
 	var err error
 	Services.XMLTemplates = template.New(tukcnst.XML)
@@ -287,37 +273,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"mappedid":         tukdbint.GetIDMapsMappedId,
 	}
 }
-func (i *EventServices) SetEventServicesStates() error {
-	var err error
-	dbconn := tukdbint.TukDBConnection{DBUser: os.Getenv(tukcnst.ENV_DB_USER), DBPassword: os.Getenv(tukcnst.ENV_DB_PASSWORD), DBHost: os.Getenv(tukcnst.ENV_DB_HOST), DBPort: os.Getenv(tukcnst.ENV_DB_PORT), DBName: os.Getenv(tukcnst.ENV_DB_NAME)}
-	if err := tukdbint.NewDBEvent(&dbconn); err != nil {
-		log.Println(err.Error())
-	}
-	if err = i.loadServiceConfig(configFile); err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	if err = i.loadServiceConfig(i.EventService.BrokerSrvc); err != nil {
-		log.Println(err.Error())
-	}
-	if err = i.loadServiceConfig(i.EventService.PDQv3Srvc); err != nil {
-		log.Println(err.Error())
-	}
-	if err = i.loadServiceConfig(i.EventService.PIXmSrvc); err != nil {
-		log.Println(err.Error())
-	}
-	if err = i.loadServiceConfig(i.EventService.XDSRepSrvc); err != nil {
-		log.Println(err.Error())
-	}
-	if err = i.loadServiceConfig(i.EventService.XDSRegSrvc); err != nil {
-		log.Println(err.Error())
-	}
-	i.WorkflowDefinitions = tukxdw.GetWorkflowDefinitionNames()
-	i.WorkflowXDWMeta = tukxdw.GetWorkflowXDSMetaNames()
-	i.ActivePathways = tukxdw.GetActiveWorkflowNames()
-	log.Printf("Initialised %v Event Services", len(i.ServiceConfigs))
-	return err
-}
+
 func (i *EventServices) loadServiceConfig(srvc string) error {
 	var err error
 	var tuksrvcState = tukdbint.ServiceState{}
@@ -466,42 +422,12 @@ func PersistTemplates() {
 		}
 	}
 }
-func PersistXDWConfigs() {
-	log.Println("Processing XDW Config Files")
-	if xdwconfigs, err := tukutil.GetFolderFiles(Basepath + "xdwconfig/"); err == nil {
-		for _, file := range xdwconfigs {
-			splitname := strings.Split(file.Name(), ".")
-			if len(splitname) < 2 {
-				log.Printf("File %s is not a XDW Configuration File", file.Name())
-				continue
-			}
-			suffix := strings.Split(file.Name(), ".")[1]
-			if filebytes := loadFile(file, Basepath+"xdwconfig/"); filebytes != nil {
-				trans := tukxdw.Transaction{
-					Actor:            tukcnst.XDW_ADMIN_REGISTER_DEFINITION,
-					Pathway:          splitname[0],
-					DSUB_BrokerURL:   os.Getenv(tukcnst.DSUB_BROKER_URL),
-					DSUB_ConsumerURL: os.Getenv(tukcnst.ENV_DSUB_CONSUMER_URL),
-					Request:          filebytes,
-				}
-				if suffix == "_meta.json" {
-					trans.Actor = tukcnst.XDW_ADMIN_REGISTER_XDS_META
-				}
-				tukxdw.Execute(&trans)
-			} else {
-				log.Printf("Unable to load file %s", file.Name())
-			}
-		}
-	}
-}
+
 func (i *TukEvent) PrettyTime(time string) string {
 	return strings.TrimSpace(strings.Split(strings.ReplaceAll(strings.ReplaceAll(time, "T", " "), "Z", ""), "+")[0])
 }
 func (i *TukEvent) IsBrokerExpression(expression string) bool {
 	return tukutil.IsBrokerExpression(expression)
-}
-func (i *TukEvent) GetMappedId(lid string) string {
-	return tukdbint.GetIDMapsMappedId(lid)
 }
 func (i *TukEvent) TaskNotes(task string) string {
 	return tukxdw.GetTaskNotes(i.Pathway, i.NHSId, tukutil.GetIntFromString(task), i.Vers)
@@ -511,38 +437,8 @@ func (i *TukEvent) ElapsedTime() string {
 	duration := time.Since(st)
 	log.Printf("Duration = %s", duration.String())
 	elapsedTime := tukutil.PrettyPrintDuration(duration)
-	log.Printf("Elapsed time for workflow %s nhs id %s version %v is %s", i.XDWWorkflowDocument.WorkflowDefinitionReference, i.XDWWorkflowDocument.Patient.ID.Extension, i.Vers, elapsedTime)
+	log.Printf("Elapsed time for workflow %s nhs id %s version %v is %s", i.XDWWorkflowDocument.WorkflowDefinitionReference, i.XDWWorkflowDocument.Patient.Extension, i.Vers, elapsedTime)
 	return elapsedTime
-}
-func (i *TukEvent) TaskCompleteByTimeString(taskid string) string {
-	log.Printf("Obtaining Workflow Task %s Complete By date", taskid)
-	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition, Task_ID: tukutil.GetIntFromString(taskid)}
-	return i.PrettyTime(trans.GetTaskCompleteByDate().String())
-}
-func (i *TukEvent) TaskDuration(taskid string) string {
-	log.Printf("Obtaining task %s duration", taskid)
-	trans := tukxdw.Transaction{XDWDefinition: i.WorkflowDefinition, XDWDocument: i.XDWWorkflowDocument, Task_ID: tukutil.GetIntFromString(taskid)}
-	return trans.GetTaskDuration()
-}
-func (i *TukEvent) IsTaskOverdue(taskid string) bool {
-	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition, Task_ID: tukutil.GetIntFromString(taskid)}
-	return trans.IsTaskOverdue()
-}
-func (i *TukEvent) getWorkflowCompleteByDate() time.Time {
-	log.Println("Obtaining Workflow Complete By Date")
-	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition}
-	return trans.GetWorkflowCompleteByDate()
-}
-func (i *TukEvent) CompletionTime() string {
-	if i.WorkflowDefinition.CompleteByTime == "" {
-		return "Non Specified"
-	}
-	return i.PrettyTime(i.getWorkflowCompleteByDate().String())
-}
-func (i *TukEvent) WorkflowTimeRemaining() string {
-	log.Printf("Obtaining time remaining for %s Workflow NHS ID %s", i.Pathway, i.NHSId)
-	trans := tukxdw.Transaction{XDWDocument: i.XDWWorkflowDocument, XDWDefinition: i.WorkflowDefinition}
-	return trans.GetWorkflowTimeRemaining()
 }
 func (i *TukEvent) parsePostEvent() []byte {
 	i.HttpResponse.Header().Set(tukcnst.CONTENT_TYPE, tukcnst.SOAP_XML)
@@ -571,7 +467,7 @@ func (i *TukEvent) newXDWHandler() []byte {
 		log.Println("Unmarshalled Workflow Definition")
 	}
 	type apirsp struct {
-		XDW tukxdw.XDWWorkflowDocument
+		XDW tukxdw.WorkflowDocument
 		DEF tukxdw.WorkflowDefinition
 	}
 	a := apirsp{XDW: i.XDWWorkflowDocument, DEF: i.WorkflowDefinition}
@@ -769,7 +665,7 @@ func (i *TukEvent) xdwContentConsumer() []byte {
 	if err := tukxdw.Execute(&trans); err != nil {
 		log.Println(err.Error())
 	}
-	bytes, _ := xml.MarshalIndent(trans.XDWDocument, "", "  ")
+	bytes, _ := xml.MarshalIndent(trans.WorkflowDocument, "", "  ")
 	return bytes
 }
 func (i *TukEvent) xdwContentCreator() []byte {
@@ -785,7 +681,7 @@ func (i *TukEvent) xdwContentCreator() []byte {
 	if err := tukxdw.Execute(&trans); err != nil {
 		log.Println(err.Error())
 	}
-	if bytes, err := xml.MarshalIndent(trans.XDWDocument, "", "  "); err == nil {
+	if bytes, err := xml.MarshalIndent(trans.WorkflowDocument, "", "  "); err == nil {
 		i.ConfigStr = string(bytes)
 		return i.ConfigWidget()
 	}
@@ -887,14 +783,11 @@ func (i *TukEvent) queryPatient() []byte {
 }
 func (i *TukEvent) setPatientInfo() error {
 	var url = ""
-	cache := false
 	switch i.EventServices.EventService.PatientSrvc {
 	case tukcnst.PDQ_SERVER_TYPE_IHE_PIXM:
 		url = i.EventServices.PIXmService.WSE
-		cache = i.EventServices.PIXmService.CacheEnabled
 	case tukcnst.PDQ_SERVER_TYPE_IHE_PDQV3:
 		url = i.EventServices.PDQv3Service.WSE
-		cache = i.EventServices.PDQv3Service.CacheEnabled
 	}
 	pdq := tukpdq.PDQQuery{
 		Server_Mode: i.EventServices.EventService.PatientSrvc,
@@ -904,7 +797,6 @@ func (i *TukEvent) setPatientInfo() error {
 		MRN_OID:     i.PIDOid,
 		REG_ID:      i.REGId,
 		REG_OID:     i.REGOid,
-		Cache:       cache,
 	}
 	log.Printf("Sending %s PDQ request to %s", i.EventServices.EventService.PatientSrvc, url)
 	if err := tukpdq.New_Transaction(&pdq); err == nil {
@@ -1319,7 +1211,6 @@ func (i *TukEvent) TimelineWidget() []byte {
 	return tplReturn.Bytes()
 }
 func (i *TukEvent) AdminSpaWidget() []byte {
-	i.EventServices.ActivePathways = tukxdw.GetActiveWorkflowNames()
 	var tplReturn bytes.Buffer
 	switch i.Task {
 	case tukcnst.TUK_TASK_RESTART:
@@ -1331,7 +1222,6 @@ func (i *TukEvent) AdminSpaWidget() []byte {
 		PersistTemplates()
 		InitTuki()
 	case tukcnst.TUK_TASK_INIT_XDWS:
-		PersistXDWConfigs()
 		InitTuki()
 	}
 	if err := i.EventServices.HTMLTemplates.ExecuteTemplate(&tplReturn, tukcnst.TUK_TEMPLATE_ADMIN_SPA_WIDGET, i); err != nil {
@@ -1341,7 +1231,6 @@ func (i *TukEvent) AdminSpaWidget() []byte {
 	return tplReturn.Bytes()
 }
 func (i *TukEvent) UserSpaWidget() []byte {
-	i.EventServices.ActivePathways = tukxdw.GetActiveWorkflowNames()
 	var tplReturn bytes.Buffer
 	if err := i.EventServices.HTMLTemplates.ExecuteTemplate(&tplReturn, tukcnst.TUK_TEMPLATE_SPA_WIDGET, i); err != nil {
 		log.Println(err.Error())

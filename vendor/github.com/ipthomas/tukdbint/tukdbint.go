@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -14,15 +13,13 @@ import (
 	"time"
 
 	"github.com/ipthomas/tukcnst"
-	"github.com/ipthomas/tukhttp"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
 var (
-	DB_URL    = ""
-	DBConn    *sql.DB
-	DebugMode = true
+	DB_URL = ""
+	DBConn *sql.DB
 )
 
 type TukDBConnection struct {
@@ -77,6 +74,11 @@ type Subscription struct {
 	Pathway    string `json:"pathway"`
 	Topic      string `json:"topic"`
 	Expression string `json:"expression"`
+	Email      string `json:"email"`
+	NhsId      string `json:"nhsid"`
+	User       string `json:"user"`
+	Org        string `json:"org"`
+	Role       string `json:"role"`
 }
 type Subscriptions struct {
 	Action        string         `json:"action"`
@@ -87,6 +89,7 @@ type Subscriptions struct {
 type Event struct {
 	Id                 int64  `json:"id"`
 	Creationtime       string `json:"creationtime"`
+	EventType          string `json:"eventtype"`
 	DocName            string `json:"docname"`
 	ClassCode          string `json:"classcode"`
 	ConfCode           string `json:"confcode"`
@@ -183,25 +186,10 @@ type IdMaps struct {
 	LidMap       []IdMap
 }
 type IdMap struct {
-	Id  int64  `json:"id"`
-	Lid string `json:"lid"`
-	Mid string `json:"mid"`
-}
-type EventAcks struct {
-	Action       string
-	LastInsertId int64
-	Where        string
-	Value        string
-	Cnt          int
-	EventAck     []EventAck
-}
-type EventAck struct {
-	Id           int64  `json:"id"`
-	CreationTime string `json:"creationtime"`
-	EventID      int64  `json:"eventid"`
-	User         string `json:"user"`
-	Org          string `json:"org"`
-	Role         string `json:"role"`
+	Id   int64  `json:"id"`
+	User string `json:"user"`
+	Lid  string `json:"lid"`
+	Mid  string `json:"mid"`
 }
 
 // sort interface for events
@@ -217,6 +205,38 @@ func (e EventsList) Swap(i, j int) {
 	e[i], e[j] = e[j], e[i]
 }
 
+// sort interface for idmaps
+type IDMapsList []IdMap
+
+func (e IDMapsList) Len() int {
+	return len(e)
+}
+func (e IDMapsList) Less(i, j int) bool {
+	return e[i].Lid > e[j].Lid
+}
+func (e IDMapsList) Swap(i, j int) {
+	e[i], e[j] = e[j], e[i]
+}
+
+// sort interface for Workflows
+type WorkflowsList []Workflow
+
+func (e WorkflowsList) Len() int {
+	return len(e)
+}
+func (e WorkflowsList) Less(i, j int) bool {
+	return e[i].Pathway > e[j].Pathway
+}
+func (e WorkflowsList) Swap(i, j int) {
+	e[i], e[j] = e[j], e[i]
+}
+
+var debugMode bool
+var idmapsCache = []IdMap{}
+
+func SetDebugMode(debug bool) {
+	debugMode = debug
+}
 func (i *TukDBConnection) InitialiseDatabase(mysqlFile string) error {
 	if DBConn != nil {
 		DBConn.Close()
@@ -266,13 +286,9 @@ type TUK_DB_Interface interface {
 	newEvent() error
 }
 
-// NewDBEvent takes an Interface (struct Events, Workflows, Subscriptions, XDWS, TukDBConnection) and executes a mysql request. The response is poputlated into the interface struct.
-// If DB_URL = "" the sql query is executed against the DBConn established using a DSN, if a value is present in DB_URL, the query is sent to the API Gateway URL (DB_URL) as a json string of the provided interface struct
 func NewDBEvent(i TUK_DB_Interface) error {
 	return i.newEvent()
 }
-
-// functions for mysql DB access via DSN
 
 func (i *TukDBConnection) newEvent() error {
 	var err error
@@ -291,7 +307,7 @@ func (i *TukDBConnection) newEvent() error {
 			i.DBName,
 			i.DBTimeout,
 			i.DBReadTimeout)
-		log.Printf("No Database API URL provided. Opening DB Connection to mysql instance via DSN - %s", dsn)
+		log.Println("No Database API URL provided. Opening DB Connection to mysql instance via DSN")
 		DBConn, err = sql.Open(tukcnst.MYSQL, dsn)
 	}
 
@@ -334,9 +350,6 @@ func GetSubscriptions(brokerref string, pathway string, expression string) Subsc
 	return subs
 }
 func (i *Subscriptions) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_SUBSCRIPTIONS
 	var rows *sql.Rows
@@ -365,7 +378,7 @@ func (i *Subscriptions) newEvent() error {
 
 		for rows.Next() {
 			sub := Subscription{}
-			if err := rows.Scan(&sub.Id, &sub.Created, &sub.BrokerRef, &sub.Pathway, &sub.Topic, &sub.Expression); err != nil {
+			if err := rows.Scan(&sub.Id, &sub.Created, &sub.BrokerRef, &sub.Pathway, &sub.Topic, &sub.Expression, &sub.Email, &sub.NhsId, &sub.User, &sub.Org, &sub.Role); err != nil {
 				switch {
 				case err == sql.ErrNoRows:
 					return nil
@@ -390,9 +403,6 @@ func GetEvents(user string, pathway string, nhsid string, expression string, tas
 	return events
 }
 func (i *Events) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_EVENTS
 	var rows *sql.Rows
@@ -421,7 +431,7 @@ func (i *Events) newEvent() error {
 
 		for rows.Next() {
 			ev := Event{}
-			if err := rows.Scan(&ev.Id, &ev.Creationtime, &ev.DocName, &ev.ClassCode, &ev.ConfCode, &ev.FormatCode, &ev.FacilityCode, &ev.PracticeCode, &ev.Speciality, &ev.Expression, &ev.Authors, &ev.XdsPid, &ev.XdsDocEntryUid, &ev.RepositoryUniqueId, &ev.NhsId, &ev.User, &ev.Org, &ev.Role, &ev.Topic, &ev.Pathway, &ev.Comments, &ev.Version, &ev.TaskId); err != nil {
+			if err := rows.Scan(&ev.Id, &ev.Creationtime, &ev.EventType, &ev.DocName, &ev.ClassCode, &ev.ConfCode, &ev.FormatCode, &ev.FacilityCode, &ev.PracticeCode, &ev.Speciality, &ev.Expression, &ev.Authors, &ev.XdsPid, &ev.XdsDocEntryUid, &ev.RepositoryUniqueId, &ev.NhsId, &ev.User, &ev.Org, &ev.Role, &ev.Topic, &ev.Pathway, &ev.Comments, &ev.Version, &ev.TaskId); err != nil {
 				switch {
 				case err == sql.ErrNoRows:
 					return nil
@@ -470,9 +480,6 @@ func GetWorkflows(pathway string, nhsid string, xdwkey string, xdwuid string, ve
 	return wfs
 }
 func (i *Workflows) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_WORKFLOWS
 	var rows *sql.Rows
@@ -562,7 +569,7 @@ func (i *WorkflowStates) newEvent() error {
 	}
 	return err
 }
-func GetWorkflowDefinitionNames() map[string]string {
+func GetWorkflowDefinitionNames(user string) map[string]string {
 	names := make(map[string]string)
 	xdws := XDWS{Action: tukcnst.SELECT}
 	xdw := XDW{IsXDSMeta: false}
@@ -570,11 +577,13 @@ func GetWorkflowDefinitionNames() map[string]string {
 	if err := xdws.newEvent(); err == nil {
 		for _, xdw := range xdws.XDW {
 			if xdw.Id > 0 {
-				names[xdw.Name] = ""
+				names[xdw.Name] = GetIDMapsMappedId(user, xdw.Name)
 			}
 		}
 	}
-	log.Printf("Returning %v XDW Config files", len(names))
+	if debugMode {
+		log.Printf("Returning %v XDW Definition Names", len(names))
+	}
 	return names
 }
 func GetWorkflowXDSMetaNames() []string {
@@ -589,10 +598,12 @@ func GetWorkflowXDSMetaNames() []string {
 			}
 		}
 	}
-	log.Printf("Returning %v XDS Meta files", len(xdwdefs))
+	if debugMode {
+		log.Printf("Returning %v XDS Meta files", len(xdwdefs))
+	}
 	return xdwdefs
 }
-func GetWorkflowDefinitions(name string) (XDWS, error) {
+func GetWorkflowDefinitions() (XDWS, error) {
 	xdws := XDWS{Action: tukcnst.SELECT}
 	err := xdws.newEvent()
 	return xdws, err
@@ -628,9 +639,6 @@ func SetWorkflowDefinition(name string, config string, isxdsmeta bool) error {
 	return xdws.newEvent()
 }
 func (i *XDWS) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_XDWS
 	var rows *sql.Rows
@@ -696,9 +704,6 @@ func SetTemplate(templatename string, isxml bool, templatestr string) error {
 	return tmplts.newEvent()
 }
 func (i *Templates) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_TEMPLATES
 	var rows *sql.Rows
@@ -743,45 +748,46 @@ func (i *Templates) newEvent() error {
 	}
 	return err
 }
-func GetIDMaps() IdMaps {
+func cachIDMaps(user string) {
 	idmaps := IdMaps{Action: tukcnst.SELECT}
-	idmap := IdMap{}
+	idmap := IdMap{User: user}
 	idmaps.LidMap = append(idmaps.LidMap, idmap)
 	if err := idmaps.newEvent(); err != nil {
 		log.Println(err.Error())
 	}
-	return idmaps
+	idmapsCache = idmaps.LidMap
+	log.Printf("Total CodeMaps: %v", len(idmapsCache))
 }
-func GetIDMapsMappedId(localid string) string {
-	idmaps := IdMaps{Action: tukcnst.SELECT}
-	idmap := IdMap{Lid: localid}
-	idmaps.LidMap = append(idmaps.LidMap, idmap)
-	if err := idmaps.newEvent(); err != nil {
-		log.Println(err.Error())
-		return localid
+func GetIDMapsMappedId(user string, localid string) string {
+	if len(idmapsCache) == 0 {
+		cachIDMaps(user)
 	}
-	if idmaps.Cnt == 1 {
-		return idmaps.LidMap[1].Mid
+	if user == "" {
+		user = "system"
+	}
+	for _, idmap := range idmapsCache {
+		if idmap.Lid == localid && idmap.User == user {
+			return idmap.Mid
+		}
 	}
 	return localid
 }
-func GetIDMapsLocalId(mid string) string {
-	idmaps := IdMaps{Action: tukcnst.SELECT}
-	idmap := IdMap{Mid: mid}
-	idmaps.LidMap = append(idmaps.LidMap, idmap)
-	if err := idmaps.newEvent(); err != nil {
-		log.Println(err.Error())
-		return mid
+func GetIDMapsLocalId(user string, mid string) string {
+	if user == "" {
+		user = "system"
 	}
-	if idmaps.Cnt == 1 {
-		return idmaps.LidMap[1].Lid
+	if len(idmapsCache) == 0 {
+		cachIDMaps(user)
+	}
+
+	for _, idmap := range idmapsCache {
+		if idmap.Mid == mid && idmap.User == user {
+			return idmap.Lid
+		}
 	}
 	return mid
 }
 func (i *IdMaps) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_IDMAPS
 	var rows *sql.Rows
@@ -809,7 +815,7 @@ func (i *IdMaps) newEvent() error {
 		}
 		for rows.Next() {
 			idmap := IdMap{}
-			if err := rows.Scan(&idmap.Id, &idmap.Lid, &idmap.Mid); err != nil {
+			if err := rows.Scan(&idmap.Id, &idmap.Lid, &idmap.Mid, &idmap.User); err != nil {
 				switch {
 				case err == sql.ErrNoRows:
 					return nil
@@ -851,9 +857,6 @@ func SetServiceState(servicename string, state string) error {
 	return srvcs.newEvent()
 }
 func (i *ServiceStates) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_SERVICESTATES
 	var rows *sql.Rows
@@ -899,9 +902,6 @@ func (i *ServiceStates) newEvent() error {
 	return err
 }
 func (i *Statics) newEvent() error {
-	if DB_URL != "" {
-		return i.newAWSEvent()
-	}
 	var err error
 	var stmntStr = tukcnst.SQL_DEFAULT_STATICS
 	var rows *sql.Rows
@@ -958,7 +958,9 @@ func GetTaskNotes(pwy string, nhsid string, taskid int, ver int) string {
 				notes = notes + note.Comments + "\n"
 			}
 		}
-		log.Printf("Found TaskId %v Notes %s", taskid, notes)
+		if debugMode {
+			log.Printf("Found TaskId %v Notes %s", taskid, notes)
+		}
 	}
 	return notes
 }
@@ -966,20 +968,23 @@ func reflectStruct(i reflect.Value) map[string]interface{} {
 	params := make(map[string]interface{})
 	structType := i.Type()
 	for f := 0; f < i.NumField(); f++ {
-		if structType.Field(f).Name == "Id" || structType.Field(f).Name == "EventID" || structType.Field(f).Name == "LastInsertId" || structType.Field(f).Name == "WorkflowId" {
+		if strings.EqualFold(structType.Field(f).Name, "Id") || strings.EqualFold(structType.Field(f).Name, "EventID") || strings.EqualFold(structType.Field(f).Name, "LastInsertId") || strings.EqualFold(structType.Field(f).Name, "WorkflowId") {
 			tint64 := i.Field(f).Interface().(int64)
 			if tint64 > 0 {
 				params[strings.ToLower(structType.Field(f).Name)] = tint64
+				log.Printf("Reflected param %s : value %v", strings.ToLower(structType.Field(f).Name), tint64)
 			}
 		} else {
-			if structType.Field(f).Name == "Version" || structType.Field(f).Name == "TaskId" {
+			if strings.EqualFold(structType.Field(f).Name, "Version") || strings.EqualFold(structType.Field(f).Name, "TaskId") {
 				tint := i.Field(f).Interface().(int)
 				if tint != -1 {
 					params[strings.ToLower(structType.Field(f).Name)] = tint
+					log.Printf("Reflected param %s : value %v", strings.ToLower(structType.Field(f).Name), tint)
 				}
 			} else {
-				if i.Field(f).Interface() != nil && i.Field(f).Interface() != "" {
+				if i.Field(f).Interface() != nil && len(i.Field(f).Interface().(string)) > 0 {
 					params[strings.ToLower(structType.Field(f).Name)] = i.Field(f).Interface()
+					log.Printf("Reflected param %s : value %v", strings.ToLower(structType.Field(f).Name), i.Field(f).Interface())
 				}
 			}
 		}
@@ -1032,6 +1037,18 @@ func createPreparedStmnt(action string, table string, params map[string]interfac
 				vals = append(vals, params["pathway"])
 				vals = append(vals, params["nhsid"])
 				vals = append(vals, params["version"])
+			case tukcnst.ID_MAPS:
+				stmntStr = "UPDATE idmaps SET "
+				var paramStr string
+				for param, val := range params {
+					if val != "" && param != "id" {
+						paramStr = paramStr + param + "= ?, "
+						vals = append(vals, val)
+					}
+				}
+				vals = append(vals, params["id"])
+				paramStr = strings.TrimSuffix(paramStr, ", ")
+				stmntStr = stmntStr + paramStr + " WHERE id = ?"
 			}
 		case tukcnst.DELETE:
 			stmntStr = "DELETE FROM " + table + " WHERE "
@@ -1070,79 +1087,4 @@ func setLastID(ctx context.Context, sqlStmnt *sql.Stmt, vals []interface{}) (int
 		}
 	}
 	return 0, nil
-}
-
-// functions for AWS Aurora DB Access via AWS API GW URL
-func (i *Statics) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.STATICS, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func (i *ServiceStates) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.SERVICE_STATES, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func (i *Subscriptions) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.SUBSCRIPTIONS, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func (i *Events) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.EVENTS, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func (i *Workflows) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.WORKFLOWS, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func (i *XDWS) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.XDWS, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func (i *IdMaps) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.ID_MAPS, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func (i *Templates) newAWSEvent() error {
-	body, _ := json.Marshal(i)
-	awsreq := aws_APIRequest(i.Action, tukcnst.TEMPLATES, body)
-	if err := tukhttp.NewRequest(&awsreq); err != nil {
-		return err
-	}
-	return json.Unmarshal(awsreq.Response, &i)
-}
-func aws_APIRequest(action string, resource string, body []byte) tukhttp.AWS_APIRequest {
-	return tukhttp.AWS_APIRequest{
-		URL:      DB_URL,
-		Act:      action,
-		Resource: resource,
-		Timeout:  5,
-		Body:     body,
-	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"log"
+	"net/http"
 	"strings"
 	"text/template"
 
@@ -15,8 +16,6 @@ import (
 	"github.com/ipthomas/tukpdq"
 	"github.com/ipthomas/tukutil"
 )
-
-var DebugMode = false
 
 // DSUBEvent implements NewEvent(i DSUB_Interface) error
 type DSUBEvent struct {
@@ -194,6 +193,9 @@ func (i *DSUBEvent) newEvent() error {
 	}
 	return err
 }
+func SetDebug(isdebug bool) {
+	isdebugMode = isdebug
+}
 
 // creates a DSUBNotifyMessage from the EventMessage and populates a new TUKEvent with the DSUBNotifyMessage values
 // It then checks for TukDB Subscriptions matching the brokerref and creates a TUKEvent for each subscription
@@ -240,6 +242,7 @@ func (i *DSUBEvent) processBrokerEventMessage() {
 						i.Event.Pathway = dbsub.Pathway
 						i.Event.Topic = dbsub.Topic
 						i.Event.NhsId = pdq.NHS_ID
+						i.Event.EventType = tukcnst.XDW_TASKEVENTTYPE_ATTACHMENT
 						tukevs := tukdbint.Events{Action: tukcnst.INSERT}
 						tukevs.Events = append(tukevs.Events, i.Event)
 						if err = tukdbint.NewDBEvent(&tukevs); err == nil {
@@ -350,11 +353,12 @@ func (i *DSUBEvent) newDSUBCancelMessage() {
 		log.Println(err.Error())
 		return
 	}
-	soapReq := tukhttp.SOAPRequest{
+	soapReq := tukhttp.HTTPRequest{
+		Method:     http.MethodPost,
 		URL:        i.BrokerURL,
 		SOAPAction: tukcnst.SOAP_ACTION_UNSUBSCRIBE_REQUEST,
 		Body:       b.Bytes(),
-		Timeout:    2,
+		Timeout:    5,
 	}
 	log.Printf("Sending Cancel Request to DSUB Broker %s", i.BrokerURL)
 	err = tukhttp.NewRequest(&soapReq)
@@ -469,7 +473,8 @@ func (i *DSUBEvent) createSubscriptions() error {
 					log.Println(err.Error())
 					return err
 				}
-				soapReq := tukhttp.SOAPRequest{
+				soapReq := tukhttp.HTTPRequest{
+					Method:     http.MethodPost,
 					URL:        i.BrokerURL,
 					SOAPAction: tukcnst.SOAP_ACTION_SUBSCRIBE_REQUEST,
 					Body:       b.Bytes(),
@@ -493,6 +498,9 @@ func (i *DSUBEvent) createSubscriptions() error {
 					newSub.Pathway = i.Pathway
 					newSub.Expression = brokerSub.Expression
 					newSub.Topic = tukcnst.DSUB_TOPIC_TYPE_CODE
+					newSub.User = "DSUB"
+					newSub.Org = "ICB"
+					newSub.Role = "BROKER"
 					newsubs := tukdbint.Subscriptions{Action: tukcnst.INSERT}
 					newsubs.Subscriptions = append(newsubs.Subscriptions, newSub)
 					log.Println("Registering Subscription with Event Service")
